@@ -3,23 +3,70 @@ ZAutomate
 
 WSBF's radio automation system, vintage 2011.
 
-## Installation
+## C++ Rewrite (2026)
 
-Ubuntu:
+This repository now includes a modern C++ implementation under `cpp/` with:
 
-    sudo apt-get install python python-tk python-tksnack python-pymad python-pyao pylint
-    git clone https://github.com/wsbf/ZAutomate.git
+- A thread-safe, multi-threaded cart queue engine
+- Parallel playlist prefetching via a thread pool
+- Fully integrated modules: Automation, Studio, and Cart Machine in one executable
+- Real WSBF API integration (HTTP calls to production endpoints)
+- Minimalist unified console interface with project branding
+- Unit/integration-style tests runnable with CTest
+- GitHub Actions CI for Linux and Windows
+- Automated release workflow with package assets per version
 
-## Development
+The integrated application header includes:
 
-    pylint **/*.py > lint.log
+- Copyright Michael Reimchen
 
-## TODO
+Legacy Python code is still available under `app/`.
 
-- review cartqueue for design flaws, possible infinite loop?
-- separate Logbook_Log into log_cart and log_track
-- create separate classes for carts and tracks
-- clean up print statements, use `logging` module
-- add hourly reload to Cart Machine
-- Large queries in DJ Studio interrupt audio streaming (use multiprocess)
-- Consider combining the three modules into one window
+### Build (C++)
+
+```bash
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
+cmake --build cpp/build -j
+```
+
+### Run Demo (C++)
+
+```bash
+./cpp/build/zautomate
+```
+
+Inside the app, use module commands:
+
+- `automation` for playout queue control
+- `studio` for live library search
+- `cart` for cart machine listing/refresh
+- `quit` to exit
+
+### Run Tests (C++)
+
+```bash
+ctest --test-dir cpp/build --output-on-failure
+```
+
+### Build Debian Package
+
+```bash
+cpack --config cpp/build/CPackConfig.cmake
+```
+
+This produces `.deb` packages on Linux.
+
+### Build Windows Package
+
+On Windows runners, the same CPack step produces `.zip` distributables.
+
+### Versioned Releases
+
+Push a tag to create a release with packaged artifacts:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The workflow in `.github/workflows/release.yml` builds, tests, packages, and publishes release assets automatically.
