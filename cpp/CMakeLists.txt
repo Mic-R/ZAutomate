@@ -10,6 +10,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 include(FetchContent)
+find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Qt6 QUIET COMPONENTS Widgets)
 
@@ -26,8 +27,12 @@ add_library(zautomate_core
 )
 
 target_include_directories(zautomate_core PUBLIC include)
-target_compile_options(zautomate_core PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(zautomate_core PUBLIC pthread)
+if(MSVC)
+    target_compile_options(zautomate_core PRIVATE /W4)
+else()
+    target_compile_options(zautomate_core PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+target_link_libraries(zautomate_core PUBLIC Threads::Threads)
 target_compile_definitions(zautomate_core PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
 
 add_library(zautomate_api
@@ -35,7 +40,11 @@ add_library(zautomate_api
     src/update_manager.cpp
 )
 target_include_directories(zautomate_api PUBLIC include)
-target_compile_options(zautomate_api PRIVATE -Wall -Wextra -Wpedantic)
+if(MSVC)
+    target_compile_options(zautomate_api PRIVATE /W4)
+else()
+    target_compile_options(zautomate_api PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 target_link_libraries(zautomate_api PUBLIC CURL::libcurl nlohmann_json::nlohmann_json)
 
 add_executable(zautomate_cli src/cli_main.cpp)
