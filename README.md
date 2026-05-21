@@ -20,8 +20,6 @@ The integrated application header includes:
 
 - Copyright Michael Reimchen
 
-Legacy Python code is still available under `app/`.
-
 ### Build (C++)
 
 ```bash
