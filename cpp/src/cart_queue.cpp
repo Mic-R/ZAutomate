@@ -322,4 +322,13 @@ void CartQueue::worker_loop() {
     }
 }
 
+void CartQueue::enqueue_cart(const Cart& cart) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    // push to front so it plays next
+    queue_.push_front(cart);
+    // recalculate start times
+    generate_start_times_locked(0);
+    cv_.notify_all();
+}
+
 }  // namespace zautomate

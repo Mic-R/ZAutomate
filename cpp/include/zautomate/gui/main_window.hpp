@@ -14,13 +14,15 @@
 class QLabel;
 class QLineEdit;
 class QListWidget;
-class QMenuBar;
 class QPushButton;
-class QTabWidget;
 class QTreeWidget;
+class QToolBar;
 class QObject;
 class QEvent;
 class QAction;
+class QWidget;
+class QGridLayout;
+class QScrollArea;
 
 namespace zautomate {
 
@@ -34,21 +36,24 @@ protected:
 private:
     void build_ui();
     void apply_theme();
+    void update_overview();
     void refresh_automation_view();
     void refresh_carts_view();
     void refresh_carts_view_async();
     void run_studio_search();
     void show_easter_egg();
     void set_busy(bool busy, const QString& message = QString());
+    void append_activity(const QString& message);
     void update_queue_list(const std::vector<Cart>& queue);
     void update_cart_tree(const std::unordered_map<int, std::vector<Cart>>& carts_by_type);
 
     std::unique_ptr<DatabaseProvider> db_;
     AutomationModule automation_;
     StudioModule studio_;
-    CartMachineModule cart_machine_;
+    std::unique_ptr<CartMachineModule> cart_machine_;
 
     QLabel* hero_title_{nullptr};
+    QLabel* overview_status_{nullptr};
     QLabel* automation_summary_{nullptr};
     QLabel* cart_summary_{nullptr};
     QLabel* status_hint_{nullptr};
@@ -56,12 +61,18 @@ private:
     QListWidget* queue_list_{nullptr};
     QListWidget* studio_results_{nullptr};
     QTreeWidget* cart_tree_{nullptr};
+    QWidget* cart_grid_container_{nullptr};
+    QGridLayout* cart_grid_layout_{nullptr};
+    QScrollArea* cart_scroll_{nullptr};
+    QListWidget* activity_log_{nullptr};
     QAction* refresh_all_action_{nullptr};
     QAction* search_action_{nullptr};
     QAction* easter_egg_action_{nullptr};
     QPushButton* studio_search_button_{nullptr};
     QPushButton* cart_refresh_button_{nullptr};
-    QTabWidget* tabs_{nullptr};
+    QMainWindow* studio_window_{nullptr};
+    QMainWindow* cart_window_{nullptr};
+    QMainWindow* automation_window_{nullptr};
 };
 
 }  // namespace zautomate

@@ -22,7 +22,7 @@ EasterEggDialog::EasterEggDialog(QWidget* parent)
     title->setObjectName("easterEggTitle");
     title->setWordWrap(true);
 
-    auto* caption = new QLabel("A playful internal marker for the desktop build.");
+    auto* caption = new QLabel("Kiss boys. Stay gay. Commit crimes.");
     caption->setObjectName("easterEggCaption");
     caption->setWordWrap(true);
 

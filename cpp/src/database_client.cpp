@@ -2,9 +2,13 @@
 
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
+#include "zautomate/logger.hpp"
 
 #include <stdexcept>
 #include <utility>
+#include <algorithm>
+#include <cctype>
+#include <string>
 
 namespace zautomate {
 
@@ -68,6 +72,48 @@ std::string json_string_or_default(const nlohmann::json& object, const char* key
     const auto& value = object.at(key);
     const auto parsed = json_string_or_empty(value);
     return parsed.empty() ? fallback : parsed;
+}
+
+// Trim helper
+static std::string trim_copy(const std::string& s) {
+    auto b = s.find_first_not_of(" \t\n\r");
+    if (b == std::string::npos) return {};
+    auto e = s.find_last_not_of(" \t\n\r");
+    return s.substr(b, e - b + 1);
+}
+
+// Attempt to locate JSON inside a response and parse robustly.
+static bool safe_parse_json(const std::string& body, nlohmann::json& out) {
+    if (body.empty()) return false;
+    // Quick check for JSON start
+    auto s = trim_copy(body);
+    if (s.empty()) return false;
+    try {
+        out = nlohmann::json::parse(s);
+        return true;
+    } catch (const nlohmann::json::parse_error&) {
+        // attempt to find first '{' or '[' and parse from there
+        const auto pos = body.find_first_of("[{\"");
+        if (pos == std::string::npos) return false;
+        try {
+            out = nlohmann::json::parse(body.substr(pos));
+            return true;
+        } catch (const nlohmann::json::parse_error&) {
+            // as a last resort, try to extract a numeric value
+            std::string t = trim_copy(body);
+            // remove non-numeric leading/trailing
+            std::string num;
+            for (char c : t) if ((c >= '0' && c <= '9') || c == '-' || c == '+') num.push_back(c);
+            if (!num.empty()) {
+                try {
+                    out = std::stoi(num);
+                    return true;
+                } catch (...) {
+                }
+            }
+        }
+    }
+    return false;
 }
 
 }  // namespace
@@ -145,16 +191,24 @@ std::string DatabaseClient::cart_type_to_index(const std::string& cart_type) {
 
 int DatabaseClient::get_new_show_id(int previous_show_id) {
     const auto body = http_get(URL_AUTOSTART, {{"showid", std::to_string(previous_show_id)}});
-    auto json = nlohmann::json::parse(body);
-    if (json.is_number_integer()) {
-        return json.get<int>();
+    if (body.empty()) {
+        Logger::log(LogLevel::kWarn, "DBClient", "Empty response for new show id");
+        return -1;
     }
-    if (json.is_string()) {
-        try {
-            return std::stoi(json.get<std::string>());
-        } catch (...) {
-            return -1;
+    nlohmann::json json;
+    if (safe_parse_json(body, json)) {
+        if (json.is_number_integer()) {
+            return json.get<int>();
         }
+        if (json.is_string()) {
+            try {
+                return std::stoi(json.get<std::string>());
+            } catch (...) {
+                return -1;
+            }
+        }
+    } else {
+        Logger::log(LogLevel::kWarn, "DBClient", "Failed to parse new show id response");
     }
     return -1;
 }
@@ -162,7 +216,14 @@ int DatabaseClient::get_new_show_id(int previous_show_id) {
 std::optional<Cart> DatabaseClient::get_cart(const std::string& cart_type) {
     for (int i = 0; i < 5; ++i) {
         const auto body = http_get(URL_AUTOCART, {{"type", cart_type_to_index(cart_type)}});
-        auto json = nlohmann::json::parse(body);
+        if (body.empty()) {
+            continue;
+        }
+        nlohmann::json json;
+        if (!safe_parse_json(body, json)) {
+            Logger::log(LogLevel::kWarn, "DBClient", "Failed to parse get_cart response");
+            continue;
+        }
 
         if (json.is_null()) {
             return std::nullopt;
@@ -186,7 +247,15 @@ std::optional<Cart> DatabaseClient::get_cart(const std::string& cart_type) {
 std::vector<Track> DatabaseClient::get_playlist(int show_id) {
     std::vector<Track> playlist;
     const auto body = http_get(URL_AUTOLOAD, {{"showid", std::to_string(show_id)}});
-    auto json = nlohmann::json::parse(body);
+    if (body.empty()) {
+        Logger::log(LogLevel::kWarn, "DBClient", "Empty playlist response");
+        return playlist;
+    }
+    nlohmann::json json;
+    if (!safe_parse_json(body, json)) {
+        Logger::log(LogLevel::kWarn, "DBClient", "Failed to parse playlist response");
+        return playlist;
+    }
     if (!json.is_array()) {
         return playlist;
     }
@@ -212,7 +281,15 @@ std::unordered_map<int, std::vector<Cart>> DatabaseClient::get_carts() {
 
     for (int cart_type = 0; cart_type <= 3; ++cart_type) {
         const auto body = http_get(URL_CARTLOAD, {{"type", std::to_string(cart_type)}});
-        auto json = nlohmann::json::parse(body);
+        if (body.empty()) {
+            Logger::log(LogLevel::kWarn, "DBClient", "Empty cart load response");
+            continue;
+        }
+        nlohmann::json json;
+        if (!safe_parse_json(body, json)) {
+            Logger::log(LogLevel::kWarn, "DBClient", "Failed to parse cart load response");
+            continue;
+        }
         if (!json.is_array()) {
             continue;
         }
@@ -239,8 +316,15 @@ LibrarySearchResult DatabaseClient::search_library(const std::string& query) {
     LibrarySearchResult out;
 
     const auto body = http_get(URL_STUDIOSEARCH, {{"query", query}});
-    auto json = nlohmann::json::parse(body);
-
+    if (body.empty()) {
+        Logger::log(LogLevel::kWarn, "DBClient", "Empty studio search response");
+        return out;
+    }
+    nlohmann::json json;
+    if (!safe_parse_json(body, json)) {
+        Logger::log(LogLevel::kWarn, "DBClient", "Failed to parse studio search response");
+        return out;
+    }
     const auto& carts = json.value("carts", nlohmann::json::array());
     if (carts.is_array()) {
         for (const auto& item : carts) {

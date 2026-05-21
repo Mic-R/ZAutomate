@@ -22,6 +22,7 @@ public:
 
     void start();
     void stop();
+    void enqueue_cart(const Cart& cart);
     [[nodiscard]] std::size_t played_count() const;
     [[nodiscard]] std::vector<Cart> queue_snapshot() const;
 
@@ -42,7 +43,7 @@ private:
 
 class CartMachineModule {
 public:
-    explicit CartMachineModule(DatabaseProvider& db);
+    explicit CartMachineModule(DatabaseProvider& db, bool initial_sync = true);
     ~CartMachineModule();
 
     void refresh();

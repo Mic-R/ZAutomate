@@ -28,6 +28,10 @@ void AutomationModule::start() {
     queue_.start();
 }
 
+void AutomationModule::enqueue_cart(const Cart& cart) {
+    queue_.enqueue_cart(cart);
+}
+
 void AutomationModule::stop() {
     queue_.stop_soft();
     queue_.wait_until_idle(std::chrono::seconds(5));
@@ -50,9 +54,18 @@ std::future<LibrarySearchResult> StudioModule::search_async(const std::string& q
     });
 }
 
-CartMachineModule::CartMachineModule(DatabaseProvider& db) : db_(db) {
-    refresh();
+CartMachineModule::CartMachineModule(DatabaseProvider& db, bool initial_sync) : db_(db) {
     stop_refresh_.store(false);
+    if (initial_sync) {
+        try {
+            refresh();
+        } catch (const std::exception& ex) {
+            Logger::log(LogLevel::kWarn, "CartMachine", std::string("initial refresh failed: ") + ex.what());
+        } catch (...) {
+            Logger::log(LogLevel::kWarn, "CartMachine", "initial refresh failed: unknown error");
+        }
+    }
+    // Start background thread which will perform periodic refreshes.
     refresh_thread_ = std::thread(&CartMachineModule::hourly_refresh_loop, this);
 }
 
@@ -83,6 +96,9 @@ std::unordered_map<int, std::vector<Cart>> CartMachineModule::carts_by_type() co
 
 void CartMachineModule::hourly_refresh_loop() {
     using namespace std::chrono;
+    // Do an initial refresh immediately in the background thread, then wait until next hour
+    if (stop_refresh_.load()) return;
+    refresh();
 
     while (!stop_refresh_.load()) {
         const auto now = system_clock::now();

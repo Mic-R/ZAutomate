@@ -37,6 +37,7 @@ public:
 
     void start();
     void stop_soft();
+    void enqueue_cart(const Cart& cart);
 
     [[nodiscard]] std::vector<Cart> get_queue_snapshot() const;
     [[nodiscard]] std::size_t played_count() const;
