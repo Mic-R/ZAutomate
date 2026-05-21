@@ -5,8 +5,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
 include(FetchContent)
 find_package(CURL REQUIRED)
+find_package(Qt6 QUIET COMPONENTS Widgets)
 
 FetchContent_Declare(
     nlohmann_json
@@ -33,9 +38,26 @@ target_include_directories(zautomate_api PUBLIC include)
 target_compile_options(zautomate_api PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(zautomate_api PUBLIC CURL::libcurl nlohmann_json::nlohmann_json)
 
-add_executable(zautomate src/main.cpp)
-target_link_libraries(zautomate PRIVATE zautomate_core zautomate_api)
-target_compile_definitions(zautomate PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
+add_executable(zautomate_cli src/cli_main.cpp)
+target_link_libraries(zautomate_cli PRIVATE zautomate_core zautomate_api)
+target_compile_definitions(zautomate_cli PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
+
+if(Qt6_FOUND)
+    add_executable(zautomate
+        src/main.cpp
+        src/gui/main_window.cpp
+        src/gui/easter_egg_dialog.cpp
+        src/gui/resources.qrc
+    )
+    target_include_directories(zautomate PRIVATE include)
+    target_link_libraries(zautomate PRIVATE zautomate_core zautomate_api Qt6::Widgets)
+    target_compile_definitions(zautomate PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
+else()
+    message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
+    add_executable(zautomate src/cli_main.cpp)
+    target_link_libraries(zautomate PRIVATE zautomate_core zautomate_api)
+    target_compile_definitions(zautomate PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
+endif()
 
 if(WIN32)
     target_compile_definitions(zautomate PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

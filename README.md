@@ -11,7 +11,7 @@ This repository now includes a modern C++ implementation under `cpp/` with:
 - Parallel playlist prefetching via a thread pool
 - Fully integrated modules: Automation, Studio, and Cart Machine in one executable
 - Real WSBF API integration (HTTP calls to production endpoints)
-- Minimalist unified console interface with project branding
+- Minimalist Qt desktop interface with project branding
 - Unit/integration-style tests runnable with CTest
 - GitHub Actions CI for Linux and Windows
 - Automated release workflow with package assets per version
@@ -33,12 +33,19 @@ cmake --build cpp/build -j
 ./cpp/build/zautomate
 ```
 
-Inside the app, use module commands:
+The CLI fallback is still available as:
 
-- `automation` for playout queue control
-- `studio` for live library search
-- `cart` for cart machine listing/refresh
-- `quit` to exit
+```bash
+./cpp/build/zautomate_cli
+```
+
+Inside the GUI, use the dashboard tabs for:
+
+- Automation queue control
+- Studio search
+- Cart machine cache refresh
+
+Hidden easter egg: use `Ctrl+Shift+B` or the App menu to reveal the hidden card.
 
 ### Run Tests (C++)
 

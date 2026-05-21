@@ -45,6 +45,31 @@ int estimate_length_ms_from_title(const std::string& title) {
     return 180000 + static_cast<int>(title.size() % 3000);
 }
 
+std::string json_string_or_empty(const nlohmann::json& value) {
+    if (value.is_string()) {
+        return value.get<std::string>();
+    }
+    if (value.is_number_integer()) {
+        return std::to_string(value.get<int>());
+    }
+    if (value.is_number_unsigned()) {
+        return std::to_string(value.get<unsigned int>());
+    }
+    if (value.is_number_float()) {
+        return std::to_string(value.get<double>());
+    }
+    return {};
+}
+
+std::string json_string_or_default(const nlohmann::json& object, const char* key, const std::string& fallback) {
+    if (!object.contains(key) || object.at(key).is_null()) {
+        return fallback;
+    }
+    const auto& value = object.at(key);
+    const auto parsed = json_string_or_empty(value);
+    return parsed.empty() ? fallback : parsed;
+}
+
 }  // namespace
 
 DatabaseClient::DatabaseClient(std::string library_prefix)
@@ -124,6 +149,13 @@ int DatabaseClient::get_new_show_id(int previous_show_id) {
     if (json.is_number_integer()) {
         return json.get<int>();
     }
+    if (json.is_string()) {
+        try {
+            return std::stoi(json.get<std::string>());
+        } catch (...) {
+            return -1;
+        }
+    }
     return -1;
 }
 
@@ -137,11 +169,11 @@ std::optional<Cart> DatabaseClient::get_cart(const std::string& cart_type) {
         }
 
         Cart cart;
-        cart.cart_id = std::to_string(json.value("cartID", 0));
-        cart.title = json.value("title", "");
-        cart.issuer = json.value("issuer", "");
-        cart.cart_type = json.value("type", cart_type);
-        cart.filename = library_prefix_ + "carts/" + json.value("filename", "");
+        cart.cart_id = json_string_or_default(json, "cartID", "0");
+        cart.title = json_string_or_default(json, "title", "");
+        cart.issuer = json_string_or_default(json, "issuer", "");
+        cart.cart_type = json_string_or_default(json, "type", cart_type);
+        cart.filename = library_prefix_ + "carts/" + json_string_or_default(json, "filename", "");
         cart.length_ms = estimate_length_ms_from_title(cart.title);
 
         if (!cart.filename.empty()) {
@@ -187,11 +219,11 @@ std::unordered_map<int, std::vector<Cart>> DatabaseClient::get_carts() {
 
         for (const auto& item : json) {
             Cart cart;
-            cart.cart_id = std::to_string(item.value("cartID", 0));
-            cart.title = item.value("title", "");
-            cart.issuer = item.value("issuer", "");
-            cart.cart_type = item.value("type", "");
-            cart.filename = library_prefix_ + "carts/" + item.value("filename", "");
+            cart.cart_id = json_string_or_default(item, "cartID", "0");
+            cart.title = json_string_or_default(item, "title", "");
+            cart.issuer = json_string_or_default(item, "issuer", "");
+            cart.cart_type = json_string_or_default(item, "type", "");
+            cart.filename = library_prefix_ + "carts/" + json_string_or_default(item, "filename", "");
             cart.length_ms = estimate_length_ms_from_title(cart.title);
 
             if (!cart.filename.empty()) {
@@ -213,11 +245,11 @@ LibrarySearchResult DatabaseClient::search_library(const std::string& query) {
     if (carts.is_array()) {
         for (const auto& item : carts) {
             Cart c;
-            c.cart_id = std::to_string(item.value("cartID", 0));
-            c.title = item.value("title", "");
-            c.issuer = item.value("issuer", "");
-            c.cart_type = item.value("type", "");
-            c.filename = library_prefix_ + "carts/" + item.value("filename", "");
+            c.cart_id = json_string_or_default(item, "cartID", "0");
+            c.title = json_string_or_default(item, "title", "");
+            c.issuer = json_string_or_default(item, "issuer", "");
+            c.cart_type = json_string_or_default(item, "type", "");
+            c.filename = library_prefix_ + "carts/" + json_string_or_default(item, "filename", "");
             c.length_ms = estimate_length_ms_from_title(c.title);
             if (!c.filename.empty()) {
                 out.carts.push_back(std::move(c));
@@ -229,11 +261,11 @@ LibrarySearchResult DatabaseClient::search_library(const std::string& query) {
     if (tracks.is_array()) {
         for (const auto& item : tracks) {
             Track t;
-            t.track_id = item.value("album_code", std::string()) + "-" + item.value("track_num", std::string());
-            t.title = item.value("track_name", "");
-            t.artist = item.value("artist_name", "");
-            t.rotation = item.value("rotation", "rotation");
-            t.filename = library_prefix_ + item.value("file_name", "");
+            t.track_id = json_string_or_default(item, "album_code", "") + "-" + json_string_or_default(item, "track_num", "");
+            t.title = json_string_or_default(item, "track_name", "");
+            t.artist = json_string_or_default(item, "artist_name", "");
+            t.rotation = json_string_or_default(item, "rotation", "rotation");
+            t.filename = library_prefix_ + json_string_or_default(item, "file_name", "");
             t.length_ms = estimate_length_ms_from_title(t.title);
             if (!t.filename.empty()) {
                 out.tracks.push_back(std::move(t));

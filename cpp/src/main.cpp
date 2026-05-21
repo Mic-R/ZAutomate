@@ -1,15 +1,31 @@
 #include <exception>
 #include <memory>
 
-#include "zautomate/database_client.hpp"
-#include "zautomate/logger.hpp"
-#include "zautomate/modules.hpp"
+#include <QApplication>
+#include <QFont>
+#include <QIcon>
 
-int main() {
+#include "zautomate/database_client.hpp"
+#include "zautomate/gui/main_window.hpp"
+#include "zautomate/logger.hpp"
+
+int main(int argc, char* argv[]) {
     try {
+        QApplication app(argc, argv);
+        app.setApplicationName("ZAutomate");
+        app.setOrganizationName("Michael Reimchen");
+        app.setApplicationDisplayName("ZAutomate");
+        app.setStyle("Fusion");
+        app.setWindowIcon(QIcon(":/assets/app-icon.svg"));
+
+        QFont font = app.font();
+        font.setPointSizeF(font.pointSizeF() > 0 ? font.pointSizeF() + 1.0 : 12.0);
+        app.setFont(font);
+
         auto db = std::make_unique<zautomate::DatabaseClient>();
-        zautomate::UnifiedApp app(std::move(db));
-        return app.run_cli();
+        zautomate::MainWindow window(std::move(db));
+        window.show();
+        return app.exec();
     } catch (const std::exception& ex) {
         zautomate::Logger::log(zautomate::LogLevel::kError, "Main", "Fatal error: " + std::string(ex.what()));
         return 1;
