@@ -1,7 +1,8 @@
-ZAutomate
+ZAutomate THIS CODE IS NOT GOOD BUT IT AT LEAST WORKS AND DOESNT CRASH (I THINK)
 =========
 
 WSBF's radio automation system, vintage 2011.
+This is dirty vibecode. I plan on making it better.
 
 ## C++ Rewrite (2026)
 
