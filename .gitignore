@@ -2,3 +2,7 @@
 *.log
 *.mp3
 cpp/build/
+.vscode/
+.idea/
+.DS_Store
+__pycache__/
