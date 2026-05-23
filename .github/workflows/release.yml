@@ -16,7 +16,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
-      ENABLE_NSIS: ${{ vars.ENABLE_NSIS }}
+      ENABLE_NSIS: 'ON'
 
     steps:
       - name: Checkout
