@@ -98,6 +98,11 @@ Required repository secrets:
 - `FTP_PASSWORD`
 - `FTP_TARGET_DIR` (remote directory path)
 
+Release files are uploaded into a versioned subfolder automatically:
+
+- `FTP_TARGET_DIR/<tag>/`
+- Example: `/releases/v1.1.0/`
+
 Example release trigger:
 
 ```bash
