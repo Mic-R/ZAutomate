@@ -7,7 +7,13 @@
 
 int main() {
     try {
-        auto db = std::make_unique<zautomate::DatabaseClient>();
+        const char* libenv = std::getenv("ZAUTOMATE_LIBRARY");
+        std::unique_ptr<zautomate::DatabaseClient> db;
+        if (libenv && libenv[0] != '\0') {
+            db = std::make_unique<zautomate::DatabaseClient>(std::string(libenv));
+        } else {
+            db = std::make_unique<zautomate::DatabaseClient>();
+        }
         zautomate::UnifiedApp app(std::move(db));
         return app.run_cli();
     } catch (const std::exception& ex) {

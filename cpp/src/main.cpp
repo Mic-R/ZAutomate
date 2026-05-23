@@ -22,6 +22,12 @@ int main(int argc, char* argv[]) {
         font.setPointSizeF(font.pointSizeF() > 0 ? font.pointSizeF() + 1.0 : 12.0);
         app.setFont(font);
 
+        const char* libenv = std::getenv("ZAUTOMATE_LIBRARY");
+        if (libenv && libenv[0] != '\0') {
+            auto db = std::make_unique<zautomate::DatabaseClient>(std::string(libenv));
+            zautomate::MainWindow window(std::move(db));
+            return app.exec();
+        }
         auto db = std::make_unique<zautomate::DatabaseClient>();
         zautomate::MainWindow window(std::move(db));
         return app.exec();
