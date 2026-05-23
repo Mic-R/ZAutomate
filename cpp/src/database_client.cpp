@@ -152,11 +152,22 @@ std::string DatabaseClient::http_get(const std::string& url, const std::vector<s
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
 
     const CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-
     if (res != CURLE_OK) {
+        const char* err = curl_easy_strerror(res);
+        curl_easy_cleanup(curl);
+        Logger::log(LogLevel::kWarn, "DBClient", std::string("HTTP GET failed: ") + (err ? err : "unknown"));
         throw std::runtime_error("HTTP GET failed");
     }
+    // Log a truncated preview of the response for debugging
+    if (!response.empty()) {
+        const std::size_t max_len = 2000;
+        const std::string preview = response.size() > max_len ? response.substr(0, max_len) + "...[truncated]" : response;
+        Logger::log(LogLevel::kInfo, "DBClient",
+                    std::string("HTTP GET response len=") + std::to_string(response.size()) + " body=" + preview);
+    } else {
+        Logger::log(LogLevel::kInfo, "DBClient", "HTTP GET response empty");
+    }
+    curl_easy_cleanup(curl);
     return response;
 }
 
@@ -178,11 +189,21 @@ std::string DatabaseClient::http_post(const std::string& url, const std::vector<
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 20L);
 
     const CURLcode res = curl_easy_perform(curl);
-    curl_easy_cleanup(curl);
-
     if (res != CURLE_OK) {
+        const char* err = curl_easy_strerror(res);
+        curl_easy_cleanup(curl);
+        Logger::log(LogLevel::kWarn, "DBClient", std::string("HTTP POST failed: ") + (err ? err : "unknown"));
         throw std::runtime_error("HTTP POST failed");
     }
+    if (!response.empty()) {
+        const std::size_t max_len = 2000;
+        const std::string preview = response.size() > max_len ? response.substr(0, max_len) + "...[truncated]" : response;
+        Logger::log(LogLevel::kInfo, "DBClient",
+                    std::string("HTTP POST response len=") + std::to_string(response.size()) + " body=" + preview);
+    } else {
+        Logger::log(LogLevel::kInfo, "DBClient", "HTTP POST response empty");
+    }
+    curl_easy_cleanup(curl);
     return response;
 }
 
