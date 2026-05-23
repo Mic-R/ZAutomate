@@ -15,8 +15,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      ENABLE_NSIS: 'ON'
 
     steps:
       - name: Checkout
@@ -131,58 +129,6 @@ jobs:
 
           & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --compiler-runtime $bundleDir\zautomate.exe
           Compress-Archive -Path "$bundleDir\*" -DestinationPath 'cpp\build\packages\zautomate-windows-bundle.zip' -Force
-
-      - name: Install NSIS (Windows, optional)
-        if: runner.os == 'Windows' && env.ENABLE_NSIS == 'ON'
-        shell: pwsh
-        run: |
-          choco install nsis -y
-
-      - name: Package NSIS installer (Windows, optional)
-        if: runner.os == 'Windows' && env.ENABLE_NSIS == 'ON'
-        shell: pwsh
-        run: |
-          cmake -S cpp -B cpp/build -G "Visual Studio 17 2022" -A x64 `
-            -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows `
-            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR/lib/cmake" `
-            -DCMAKE_BUILD_TYPE=Release
-          cpack --config cpp/build/CPackConfig.cmake -G NSIS -B cpp/build/packages
-
-      - name: Dump NSIS logs (on failure)
-        if: runner.os == 'Windows' && env.ENABLE_NSIS == 'ON' && failure()
-        shell: pwsh
-        run: |
-          $nsisDir = Join-Path 'cpp\build\packages' '_CPack_Packages\win64\NSIS'
-          if (Test-Path $nsisDir) {
-            Write-Host "Listing $nsisDir"
-            Get-ChildItem $nsisDir | ForEach-Object { Write-Host $_.FullName }
-            $outLog = Join-Path $nsisDir 'NSISOutput.log'
-            $nsiFile = Join-Path $nsisDir 'project.nsi'
-            if (Test-Path $outLog) {
-              Write-Host '==== NSISOutput.log ===='
-              Get-Content $outLog -ErrorAction SilentlyContinue | Select-Object -First 400 | ForEach-Object { Write-Host $_ }
-              Write-Host '==== end NSISOutput.log ===='
-            } else {
-              Write-Host 'No NSISOutput.log found'
-            }
-            if (Test-Path $nsiFile) {
-              Write-Host '==== project.nsi ===='
-              Get-Content $nsiFile -ErrorAction SilentlyContinue | Select-Object -First 400 | ForEach-Object { Write-Host $_ }
-              Write-Host '==== end project.nsi ===='
-            } else {
-              Write-Host 'No project.nsi found'
-            }
-          } else {
-            Write-Host "$nsisDir does not exist"
-          }
-
-      - name: Upload NSIS debug artifact (on failure)
-        if: runner.os == 'Windows' && env.ENABLE_NSIS == 'ON' && failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nsis-debug-${{ github.run_id }}
-          path: cpp/build/packages/_CPack_Packages/win64/NSIS
 
       - name: Collect ZIP package (Windows)
         if: runner.os == 'Windows'
