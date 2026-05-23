@@ -81,7 +81,10 @@ if(Qt6_FOUND)
         set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME}")
         # Use forward-slashes to avoid CMake escape-sequence issues (CMP0010)
         set(CPACK_NSIS_INSTALLED_ICON_NAME "bin/zautomate.exe")
-        set(CPACK_NSIS_CREATE_ICONS ON)
+        # Disable automatic NSIS shortcut/icon creation to avoid malformed
+        # NSIS script generation on some runners. Create shortcuts manually
+        # in the installer script if needed.
+        set(CPACK_NSIS_CREATE_ICONS OFF)
     endif()
 else()
     message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
