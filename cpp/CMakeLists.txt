@@ -77,8 +77,15 @@ if(Qt6_FOUND)
             message(WARNING "CPack: app.ico not found at cpp/src/gui/resources/app.ico — skipping NSIS icon settings to avoid makensis errors.")
         endif()
         # Ensure NSIS installer creates shortcuts and installs the executable
-        set(CPACK_PACKAGE_EXECUTABLES "zautomate;ZAutomate")
-        set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME}")
+        # Only set executable/shortcut-related CPACK variables when an app
+        # icon is present to avoid generating Start Menu/Shortcut code on
+        # environments where NSIS macro expansion can produce invalid tokens.
+        if(EXISTS "${CMAKE_SOURCE_DIR}/cpp/src/gui/resources/app.ico")
+            set(CPACK_PACKAGE_EXECUTABLES "zautomate;ZAutomate")
+            set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME}")
+        else()
+            message(STATUS "Skipping CPACK_PACKAGE_EXECUTABLES - no app.ico present")
+        endif()
         # Use forward-slashes to avoid CMake escape-sequence issues (CMP0010)
         set(CPACK_NSIS_INSTALLED_ICON_NAME "bin/zautomate.exe")
         # Disable automatic NSIS shortcut/icon creation to avoid malformed
