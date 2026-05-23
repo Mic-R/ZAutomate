@@ -23,19 +23,11 @@ public:
     void start();
     void stop();
     void enqueue_cart(const Cart& cart);
-    void append_cart(const Cart& cart);
-    void clear_queue();
-    bool remove_cart_by_id(const std::string& cart_id);
-    void set_on_cart_start(std::function<void(const Cart&)> callback);
     [[nodiscard]] std::size_t played_count() const;
     [[nodiscard]] std::vector<Cart> queue_snapshot() const;
-    [[nodiscard]] std::optional<Cart> current_cart_snapshot() const;
-    [[nodiscard]] std::chrono::system_clock::time_point current_started_at() const;
-    [[nodiscard]] bool is_playing() const;
 
 private:
     CartQueue queue_;
-    std::function<void(const Cart&)> on_cart_start_callback_;
 };
 
 class StudioModule {

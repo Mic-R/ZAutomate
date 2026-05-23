@@ -15,21 +15,14 @@ namespace zautomate {
 AutomationModule::AutomationModule(DatabaseProvider& db)
     : queue_(
           db,
-          [this](const Cart& cart) {
+          [](const Cart& cart) {
               Logger::log(LogLevel::kInfo, "Automation", "START  " + cart.issuer + " - " + cart.title);
-              if (on_cart_start_callback_) {
-                  on_cart_start_callback_(cart);
-              }
           },
           [](const Cart& cart) {
               Logger::log(LogLevel::kInfo, "Automation", "STOP   " + cart.issuer + " - " + cart.title);
           },
           10,
           4) {}
-
-void AutomationModule::set_on_cart_start(std::function<void(const Cart&)> callback) {
-    on_cart_start_callback_ = std::move(callback);
-}
 
 void AutomationModule::start() {
     queue_.start();
@@ -39,20 +32,9 @@ void AutomationModule::enqueue_cart(const Cart& cart) {
     queue_.enqueue_cart(cart);
 }
 
-void AutomationModule::append_cart(const Cart& cart) {
-    queue_.append_cart(cart);
-}
-
-void AutomationModule::clear_queue() {
-    queue_.clear_queue();
-}
-
-bool AutomationModule::remove_cart_by_id(const std::string& cart_id) {
-    return queue_.remove_cart_by_id(cart_id);
-}
-
 void AutomationModule::stop() {
     queue_.stop_soft();
+    queue_.wait_until_idle(std::chrono::seconds(5));
 }
 
 std::size_t AutomationModule::played_count() const {
@@ -61,18 +43,6 @@ std::size_t AutomationModule::played_count() const {
 
 std::vector<Cart> AutomationModule::queue_snapshot() const {
     return queue_.get_queue_snapshot();
-}
-
-std::optional<Cart> AutomationModule::current_cart_snapshot() const {
-    return queue_.current_cart_snapshot();
-}
-
-std::chrono::system_clock::time_point AutomationModule::current_started_at() const {
-    return queue_.current_started_at();
-}
-
-bool AutomationModule::is_playing() const {
-    return queue_.is_playing();
 }
 
 StudioModule::StudioModule(DatabaseProvider& db, std::size_t workers)

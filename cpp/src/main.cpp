@@ -24,6 +24,7 @@ int main(int argc, char* argv[]) {
 
         auto db = std::make_unique<zautomate::DatabaseClient>();
         zautomate::MainWindow window(std::move(db));
+        window.show();
         return app.exec();
     } catch (const std::exception& ex) {
         zautomate::Logger::log(zautomate::LogLevel::kError, "Main", "Fatal error: " + std::string(ex.what()));

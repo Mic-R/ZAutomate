@@ -23,8 +23,6 @@ class QAction;
 class QWidget;
 class QGridLayout;
 class QScrollArea;
-class QTimer;
-class QComboBox;
 
 namespace zautomate {
 
@@ -46,9 +44,6 @@ private:
     void show_easter_egg();
     void set_busy(bool busy, const QString& message = QString());
     void append_activity(const QString& message);
-    void update_playback_status();
-    void prompt_queue_choice_and_enqueue(const Cart& cart, bool play_next);
-    void sync_cart_preview();
     void update_queue_list(const std::vector<Cart>& queue);
     void update_cart_tree(const std::unordered_map<int, std::vector<Cart>>& carts_by_type);
 
@@ -70,14 +65,6 @@ private:
     QGridLayout* cart_grid_layout_{nullptr};
     QScrollArea* cart_scroll_{nullptr};
     QListWidget* activity_log_{nullptr};
-    QLabel* now_playing_label_{nullptr};
-    QLabel* now_playing_time_{nullptr};
-    QTimer* playback_timer_{nullptr};
-    QLabel* cart_current_label_{nullptr};
-    QLabel* cart_next_label_{nullptr};
-    QListWidget* cart_preview_queue_{nullptr};
-    QComboBox* audio_output_combo_{nullptr};
-    QLabel* audio_output_status_{nullptr};
     QAction* refresh_all_action_{nullptr};
     QAction* search_action_{nullptr};
     QAction* easter_egg_action_{nullptr};
