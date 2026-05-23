@@ -61,6 +61,9 @@ if(Qt6_FOUND)
     target_include_directories(zautomate PRIVATE include)
     target_link_libraries(zautomate PRIVATE zautomate_core zautomate_api Qt6::Widgets)
     target_compile_definitions(zautomate PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
+    if(APPLE)
+        set_target_properties(zautomate PROPERTIES MACOSX_BUNDLE TRUE)
+    endif()
 else()
     message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
     add_executable(zautomate src/cli_main.cpp)
@@ -81,6 +84,7 @@ enable_testing()
 add_test(NAME zautomate_tests COMMAND zautomate_tests)
 
 install(TARGETS zautomate
+    BUNDLE DESTINATION .
     RUNTIME DESTINATION bin
 )
 
@@ -91,7 +95,9 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Unified MIE ZAutomate C++")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE")
 
-if(WIN32)
+if(APPLE)
+    set(CPACK_GENERATOR "TGZ;DragNDrop")
+elseif(WIN32)
     set(CPACK_GENERATOR "ZIP")
     if(DEFINED ENV{ENABLE_NSIS} AND "$ENV{ENABLE_NSIS}" STREQUAL "ON")
         list(APPEND CPACK_GENERATOR "NSIS")

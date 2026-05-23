@@ -76,3 +76,31 @@ git push origin v1.0.0
 ```
 
 The workflow in `.github/workflows/release.yml` builds, tests, packages, and publishes release assets automatically.
+
+## Installation Wizard / Installer Artifacts
+
+Release builds now produce installer-friendly artifacts for all target platforms:
+
+- Ubuntu: `.deb` package (plus `.tgz` archive)
+- Windows: `.zip` bundle, and optional NSIS installer `.exe` (wizard)
+- macOS: `.dmg` installer image (plus `.tgz` archive)
+
+To enable the Windows installer wizard, set repository variable `ENABLE_NSIS=ON`.
+
+## FTP Deployment for Release Artifacts
+
+After a tag-based release is built and the GitHub Release is created, artifacts are uploaded to your FTP server.
+
+Required repository secrets:
+
+- `FTP_SERVER`
+- `FTP_USERNAME`
+- `FTP_PASSWORD`
+- `FTP_TARGET_DIR` (remote directory path)
+
+Example release trigger:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```

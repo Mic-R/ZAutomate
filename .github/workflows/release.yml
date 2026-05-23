@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
       ENABLE_NSIS: ${{ vars.ENABLE_NSIS }}
@@ -25,6 +25,10 @@ jobs:
       - name: Install build tools (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ libcurl4-openssl-dev dpkg-dev
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja curl qt
 
       - name: Install Qt 6 (Windows, MSVC)
         if: runner.os == 'Windows'
@@ -50,6 +54,10 @@ jobs:
         if: runner.os == 'Linux'
         run: cmake -S cpp -B cpp/build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
+      - name: Configure (macOS)
+        if: runner.os == 'macOS'
+        run: cmake -S cpp -B cpp/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix qt)/lib/cmake"
+
       - name: Configure (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -64,6 +72,10 @@ jobs:
         if: runner.os == 'Linux'
         run: cmake --build cpp/build
 
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: cmake --build cpp/build
+
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -73,6 +85,10 @@ jobs:
         if: runner.os == 'Linux'
         run: ctest --test-dir cpp/build --output-on-failure
 
+      - name: Run tests (macOS)
+        if: runner.os == 'macOS'
+        run: ctest --test-dir cpp/build --output-on-failure
+
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -80,6 +96,10 @@ jobs:
 
       - name: Package (Linux)
         if: runner.os == 'Linux'
+        run: cpack --config cpp/build/CPackConfig.cmake
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
         run: cpack --config cpp/build/CPackConfig.cmake
 
       - name: Package bundle (Windows)
@@ -118,6 +138,7 @@ jobs:
             cpp/build/*.tgz
             cpp/build/*.zip
             cpp/build/*.exe
+            cpp/build/*.dmg
             cpp/build/zautomate-windows-bundle.zip
 
   create-release:
@@ -138,4 +159,26 @@ jobs:
             dist/**/*.tgz
             dist/**/*.zip
             dist/**/*.exe
+            dist/**/*.dmg
           generate_release_notes: true
+
+  ftp-upload:
+    runs-on: ubuntu-latest
+    needs: [build-packages, create-release]
+    if: success()
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Upload release files via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: dist/
+          server-dir: ${{ secrets.FTP_TARGET_DIR }}/
+          dangerous-clean-slate: false
