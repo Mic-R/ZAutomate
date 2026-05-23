@@ -1,0 +1,4 @@
+// Windows resource script for ZAutomate
+// Place an icon at cpp/src/gui/resources/app.ico
+
+1 ICON "..\\resources\\app.ico"

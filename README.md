@@ -109,3 +109,20 @@ Example release trigger:
 git tag v1.1.0
 git push origin v1.1.0
 ```
+
+## Windows: App icon and SmartScreen (code signing)
+
+If the app icon does not appear in the Windows taskbar, ensure an ICO file is available at `cpp/src/gui/resources/app.ico` — the build embeds that into the EXE on Windows using `cpp/src/gui/windows/app.rc`.
+
+SmartScreen warnings are triggered by unsigned binaries or low-reputation publishers. To avoid the SmartScreen warning you must sign your executable and installer with a code signing certificate. Recommended approaches:
+
+- Purchase an EV code signing certificate and sign both the EXE and the NSIS installer using `signtool.exe` (Windows) or `osslsigncode` (cross-platform). Timestamp signatures so they remain valid after certificate expiry.
+- On Windows, use:
+
+```powershell
+& "C:\Program Files (x86)\Windows Kits\10\bin\x64\signtool.exe" sign /fd SHA256 /tr "http://timestamp.digicert.com" /td SHA256 /a "path\\to\\certificate.pfx" /p "$env:PFX_PASSWORD" "path\\to\\zautomate.exe"
+```
+
+- You can automate signing in GitHub Actions by providing a base64-encoded `.pfx` in a secret and using a step that decodes and calls `signtool` on a Windows runner. EV certs build reputation faster and reduce SmartScreen prompts.
+
+I can add an example GitHub Actions signing step if you want; you'll need to provide the certificate and any required secrets.  
