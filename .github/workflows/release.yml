@@ -149,6 +149,8 @@ jobs:
           $bundleDir = Join-Path $env:GITHUB_WORKSPACE 'dist\zautomate-windows'
           New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
           Copy-Item 'cpp\build\Release\zautomate.exe' $bundleDir
+          Copy-Item 'cpp\install.bat' $bundleDir
+          Copy-Item 'LICENSE' $bundleDir
 
           # Ensure libcurl.dll is present in the bundle root.
           $curlCandidates = @(
