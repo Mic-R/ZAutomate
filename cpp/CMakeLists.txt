@@ -82,16 +82,12 @@ if(Qt6_FOUND)
         # environments where NSIS macro expansion can produce invalid tokens.
         if(EXISTS "${CMAKE_SOURCE_DIR}/src/gui/resources/app.ico")
             set(CPACK_PACKAGE_EXECUTABLES "zautomate;ZAutomate")
-            set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME}")
+            set(CPACK_NSIS_DISPLAY_NAME "zautomate")
         else()
             message(STATUS "Skipping CPACK_PACKAGE_EXECUTABLES - no app.ico present")
         endif()
         # Use forward-slashes to avoid CMake escape-sequence issues (CMP0010)
         set(CPACK_NSIS_INSTALLED_ICON_NAME "bin/zautomate.exe")
-        # Disable automatic NSIS shortcut/icon creation to avoid malformed
-        # NSIS script generation on some runners. Create shortcuts manually
-        # in the installer script if needed.
-        set(CPACK_NSIS_CREATE_ICONS OFF)
     endif()
 else()
     message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
