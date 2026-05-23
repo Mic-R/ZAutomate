@@ -72,6 +72,11 @@ if(Qt6_FOUND)
         # Instruct CPack/NSIS to use the application icon if provided
         set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/cpp/src/gui/resources/app.ico")
         set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/cpp/src/gui/resources/app.ico")
+        # Ensure NSIS installer creates shortcuts and installs the executable
+        set(CPACK_PACKAGE_EXECUTABLES "zautomate;ZAutomate")
+        set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME}")
+        set(CPACK_NSIS_INSTALLED_ICON_NAME "bin\\zautomate.exe")
+        set(CPACK_NSIS_CREATE_ICONS ON)
     endif()
 else()
     message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
