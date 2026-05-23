@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 #include <exception>
 #include <future>
 #include <optional>
@@ -14,6 +15,16 @@ namespace {
 
 bool is_fcc_cart_type(const std::string& type) {
     return type == "StationID" || type == "PSA" || type == "Underwriting";
+}
+
+std::tm localtime_safe(const std::time_t& time_value) {
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &time_value);
+#else
+    localtime_r(&time_value, &tm);
+#endif
+    return tm;
 }
 
 }  // namespace
@@ -180,7 +191,7 @@ void CartQueue::insert_cart_locked(const CartRule& rule) {
 
     const auto now = std::chrono::system_clock::now();
     const std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm target_tm = *std::localtime(&now_time_t);
+    std::tm target_tm = localtime_safe(now_time_t);
     target_tm.tm_min = rule.minute;
     target_tm.tm_sec = 0;
 

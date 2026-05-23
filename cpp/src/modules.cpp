@@ -12,6 +12,20 @@
 
 namespace zautomate {
 
+namespace {
+
+std::tm localtime_safe(const std::time_t& time_value) {
+    std::tm tm{};
+#if defined(_WIN32)
+    localtime_s(&tm, &time_value);
+#else
+    localtime_r(&time_value, &tm);
+#endif
+    return tm;
+}
+
+}  // namespace
+
 AutomationModule::AutomationModule(DatabaseProvider& db)
     : queue_(
           db,
@@ -133,7 +147,7 @@ void CartMachineModule::hourly_refresh_loop() {
     while (!stop_refresh_.load()) {
         const auto now = system_clock::now();
         const std::time_t now_time = system_clock::to_time_t(now);
-        std::tm tm = *std::localtime(&now_time);
+        std::tm tm = localtime_safe(now_time);
         tm.tm_min = 0;
         tm.tm_sec = 0;
         tm.tm_hour += 1;

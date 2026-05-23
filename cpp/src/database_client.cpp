@@ -87,6 +87,24 @@ static std::string shell_escape(const std::string& s) {
     return out;
 }
 
+#if defined(_WIN32)
+static FILE* process_popen(const char* command, const char* mode) {
+    return _popen(command, mode);
+}
+
+static int process_pclose(FILE* file) {
+    return _pclose(file);
+}
+#else
+static FILE* process_popen(const char* command, const char* mode) {
+    return popen(command, mode);
+}
+
+static int process_pclose(FILE* file) {
+    return pclose(file);
+}
+#endif
+
 // Probe media file duration using ffprobe; return milliseconds or 0 if unknown
 static int probe_media_duration_ms(const std::string& path) {
     if (!file_exists(path)) return 0;
@@ -94,7 +112,7 @@ static int probe_media_duration_ms(const std::string& path) {
     const std::string cmd = std::string("ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ") + shell_escape(path);
     std::array<char, 256> buf{};
     std::string result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+    std::unique_ptr<FILE, int (*)(FILE*)> pipe(process_popen(cmd.c_str(), "r"), process_pclose);
     if (!pipe) return 0;
     while (fgets(buf.data(), static_cast<int>(buf.size()), pipe.get()) != nullptr) {
         result += buf.data();
