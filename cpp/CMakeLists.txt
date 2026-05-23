@@ -66,13 +66,13 @@ if(Qt6_FOUND)
     endif()
     if(WIN32)
         # Embed Windows icon resource if present
-        if(EXISTS "${CMAKE_SOURCE_DIR}/cpp/src/gui/windows/app.rc")
+        if(EXISTS "${CMAKE_SOURCE_DIR}/src/gui/windows/app.rc")
             target_sources(zautomate PRIVATE src/gui/windows/app.rc)
         endif()
         # Instruct CPack/NSIS to use the application icon if provided
-        if(EXISTS "${CMAKE_SOURCE_DIR}/cpp/src/gui/resources/app.ico")
-            set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/cpp/src/gui/resources/app.ico")
-            set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/cpp/src/gui/resources/app.ico")
+        if(EXISTS "${CMAKE_SOURCE_DIR}/src/gui/resources/app.ico")
+            set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/src/gui/resources/app.ico")
+            set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/src/gui/resources/app.ico")
         else()
             message(WARNING "CPack: app.ico not found at cpp/src/gui/resources/app.ico — skipping NSIS icon settings to avoid makensis errors.")
         endif()
@@ -80,7 +80,7 @@ if(Qt6_FOUND)
         # Only set executable/shortcut-related CPACK variables when an app
         # icon is present to avoid generating Start Menu/Shortcut code on
         # environments where NSIS macro expansion can produce invalid tokens.
-        if(EXISTS "${CMAKE_SOURCE_DIR}/cpp/src/gui/resources/app.ico")
+        if(EXISTS "${CMAKE_SOURCE_DIR}/src/gui/resources/app.ico")
             set(CPACK_PACKAGE_EXECUTABLES "zautomate;ZAutomate")
             set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME}")
         else()
