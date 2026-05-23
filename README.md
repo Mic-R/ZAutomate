@@ -1,5 +1,6 @@
 ZAutomate THIS CODE IS NOT GOOD BUT IT AT LEAST WORKS AND DOESNT CRASH (I THINK)
 =========
+[![Release](https://github.com/Mic-R/ZAutomate/actions/workflows/release.yml/badge.svg)](https://github.com/Mic-R/ZAutomate/actions/workflows/release.yml)
 
 WSBF's radio automation system, vintage 2011.
 This is dirty vibecode. I plan on making it better.
