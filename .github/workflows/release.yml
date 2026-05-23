@@ -167,12 +167,29 @@ jobs:
           cp -f cpp/build/*.tar.gz cpp/build/packages/ 2>/dev/null || true
           cp -f cpp/build/*.dmg cpp/build/packages/ 2>/dev/null || true
 
+      - name: Prepare upload artifacts (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p cpp/build/artifacts
+          find cpp/build/packages -maxdepth 1 -type f \( -name '*.deb' -o -name '*.tgz' -o -name '*.tar.gz' -o -name '*.dmg' -o -name '*.zip' -o -name '*.exe' \) -exec cp -f {} cpp/build/artifacts/ \;
+
+      - name: Prepare upload artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path 'cpp\build\artifacts' | Out-Null
+          Get-ChildItem 'cpp\build\packages' -File | ForEach-Object {
+            Copy-Item $_.FullName 'cpp\build\artifacts\' -Force
+          }
+
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ runner.os }}
-          path: cpp/build/packages/*
+          path: cpp/build/artifacts/*
           if-no-files-found: error
+          compression-level: 0
 
   create-release:
     runs-on: ubuntu-latest
