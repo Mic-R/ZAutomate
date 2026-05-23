@@ -38,9 +38,15 @@ public:
     void start();
     void stop_soft();
     void enqueue_cart(const Cart& cart);
+    void append_cart(const Cart& cart);
+    void clear_queue();
+    bool remove_cart_by_id(const std::string& cart_id);
 
     [[nodiscard]] std::vector<Cart> get_queue_snapshot() const;
     [[nodiscard]] std::size_t played_count() const;
+    [[nodiscard]] std::optional<Cart> current_cart_snapshot() const;
+    [[nodiscard]] std::chrono::system_clock::time_point current_started_at() const;
+    [[nodiscard]] bool is_playing() const;
 
     bool wait_until_idle(std::chrono::milliseconds timeout);
 
@@ -69,6 +75,8 @@ private:
     std::deque<Cart> queue_;
     std::vector<Cart> played_;
     std::atomic<int> show_id_;
+    std::optional<Cart> current_cart_;
+    std::chrono::system_clock::time_point current_started_at_{};
 
     bool is_playing_;
     bool shutdown_;

@@ -20,11 +20,15 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMetaObject>
+#include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
+#include <QBrush>
+#include <QColor>
 #include <QShortcut>
 #include <QStatusBar>
 #include <QThreadPool>
+#include <QTimer>
 #include <QSplitter>
 #include <QStringList>
 #include <QTreeWidget>
@@ -33,9 +37,17 @@
 #include <QGridLayout>
 #include <QScrollArea>
 #include <QDesktopServices>
+#include <QComboBox>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QIcon>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include "zautomate/logger.hpp"
 #include "zautomate/gui/easter_egg_dialog.hpp"
@@ -43,6 +55,141 @@
 namespace zautomate {
 
 namespace {
+
+enum SearchItemRole {
+    KindRole = Qt::UserRole + 1,
+    IdRole,
+    IssuerRole,
+    TitleRole,
+    FileRole,
+    TypeRole,
+    DurationRole,
+    LengthRole,
+};
+
+constexpr char kCartMimeType[] = "application/x-zautomate-cart";
+
+QJsonObject cart_to_json(const Cart& cart, const QString& kind) {
+    QJsonObject obj;
+    obj["kind"] = kind;
+    obj["id"] = QString::fromStdString(cart.cart_id);
+    obj["issuer"] = QString::fromStdString(cart.issuer);
+    obj["title"] = QString::fromStdString(cart.title);
+    obj["file"] = QString::fromStdString(cart.filename);
+    obj["type"] = QString::fromStdString(cart.cart_type);
+    obj["durationMs"] = cart.length_ms;
+    return obj;
+}
+
+Cart cart_from_json(const QJsonObject& obj) {
+    Cart cart;
+    cart.cart_id = obj["id"].toString().toStdString();
+    cart.issuer = obj["issuer"].toString().toStdString();
+    cart.title = obj["title"].toString().toStdString();
+    cart.filename = obj["file"].toString().toStdString();
+    cart.cart_type = obj["type"].toString().toStdString();
+    cart.length_ms = obj["durationMs"].toInt();
+    return cart;
+}
+
+int parse_duration_ms_from_item(QListWidgetItem* item) {
+    const auto raw = item->data(LengthRole);
+    if (raw.isValid()) {
+        return raw.toInt();
+    }
+    const auto duration = item->data(DurationRole).toString();
+    const auto parts = duration.split(":");
+    if (parts.size() != 2) {
+        return 0;
+    }
+    return parts[0].toInt() * 60 * 1000 + parts[1].toInt() * 1000;
+}
+
+Cart cart_from_item(QListWidgetItem* item) {
+    Cart cart;
+    cart.cart_id = item->data(IdRole).toString().toStdString();
+    cart.issuer = item->data(IssuerRole).toString().toStdString();
+    cart.title = item->data(TitleRole).toString().toStdString();
+    cart.filename = item->data(FileRole).toString().toStdString();
+    cart.cart_type = item->data(TypeRole).toString().toStdString();
+    cart.length_ms = parse_duration_ms_from_item(item);
+    return cart;
+}
+
+class CartDragListWidget : public QListWidget {
+public:
+    using QListWidget::QListWidget;
+
+protected:
+    void startDrag(Qt::DropActions supportedActions) override {
+        auto* item = currentItem();
+        if (!item) {
+            return;
+        }
+
+        const QString kind = item->data(KindRole).toString();
+        Cart cart = cart_from_item(item);
+        if (cart.cart_id.empty()) {
+            return;
+        }
+
+        auto* mime = new QMimeData();
+        mime->setData(kCartMimeType, QJsonDocument(cart_to_json(cart, kind)).toJson(QJsonDocument::Compact));
+
+        auto* drag = new QDrag(this);
+        drag->setMimeData(mime);
+        drag->setPixmap(viewport()->grab(visualItemRect(item)));
+        drag->exec(supportedActions, Qt::CopyAction);
+    }
+};
+
+class QueueDropListWidget : public QListWidget {
+public:
+    explicit QueueDropListWidget(std::function<void(const Cart&, bool)> onDrop, QWidget* parent = nullptr)
+        : QListWidget(parent), onDrop_(std::move(onDrop)) {
+        setAcceptDrops(true);
+        setDropIndicatorShown(true);
+    }
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override {
+        if (event->mimeData()->hasFormat(kCartMimeType)) {
+            event->acceptProposedAction();
+            return;
+        }
+        QListWidget::dragEnterEvent(event);
+    }
+
+    void dragMoveEvent(QDragMoveEvent* event) override {
+        if (event->mimeData()->hasFormat(kCartMimeType)) {
+            event->acceptProposedAction();
+            return;
+        }
+        QListWidget::dragMoveEvent(event);
+    }
+
+    void dropEvent(QDropEvent* event) override {
+        if (event->mimeData()->hasFormat(kCartMimeType)) {
+            const auto json = QJsonDocument::fromJson(event->mimeData()->data(kCartMimeType)).object();
+            if (onDrop_) {
+                onDrop_(cart_from_json(json), event->modifiers() & Qt::ShiftModifier);
+            }
+            event->acceptProposedAction();
+            return;
+        }
+        QListWidget::dropEvent(event);
+    }
+
+private:
+    std::function<void(const Cart&, bool)> onDrop_;
+};
+
+QString search_item_text(const QString& kind, const QString& issuer, const QString& title) {
+    if (kind == "track") {
+        return QString("[Track] %1 - %2").arg(issuer, title);
+    }
+    return QString("[Cart] %1 - %2").arg(issuer, title);
+}
 
 QString cart_type_label(int type) {
     switch (type) {
@@ -61,6 +208,13 @@ QString cart_type_label(int type) {
 
 QString format_item_line(const Cart& cart) {
     return QString("%1  %2 - %3").arg(QString::fromStdString(cart.cart_type), QString::fromStdString(cart.issuer), QString::fromStdString(cart.title));
+}
+
+QString format_duration(int ms) {
+    const int totalSeconds = std::max(0, ms / 1000);
+    const int minutes = totalSeconds / 60;
+    const int seconds = totalSeconds % 60;
+    return QString("%1:%2").arg(minutes, 2, 10, QChar('0')).arg(seconds, 2, 10, QChar('0'));
 }
 
 class ElideDelegate : public QStyledItemDelegate {
@@ -134,6 +288,16 @@ MainWindow::MainWindow(std::unique_ptr<DatabaseProvider> db_client, QWidget* par
     apply_theme();
     // Construct cart machine without initial synchronous refresh to avoid blocking GUI startup
     cart_machine_ = std::make_unique<CartMachineModule>(*db_, false);
+    automation_.set_on_cart_start([this](const Cart& cart) {
+        QMetaObject::invokeMethod(this, [this, cart]() {
+            refresh_automation_view();
+            append_activity(QString("Cart started: %1 - %2").arg(QString::fromStdString(cart.issuer), QString::fromStdString(cart.title)));
+        }, Qt::QueuedConnection);
+    });
+    playback_timer_ = new QTimer(this);
+    playback_timer_->setInterval(1000);
+    connect(playback_timer_, &QTimer::timeout, this, &MainWindow::update_playback_status);
+    playback_timer_->start();
     refresh_automation_view();
     refresh_carts_view_async();
     append_activity("Dashboard ready.");
@@ -179,7 +343,7 @@ void MainWindow::build_ui() {
     search_action_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_K));
     connect(search_action_, &QAction::triggered, this, &MainWindow::run_studio_search);
 
-    easter_egg_action_ = toolsMenu->addAction("Hidden card");
+    easter_egg_action_ = toolsMenu->addAction("Shh big secret!");
     easter_egg_action_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B));
     connect(easter_egg_action_, &QAction::triggered, this, &MainWindow::show_easter_egg);
 
@@ -187,7 +351,7 @@ void MainWindow::build_ui() {
     auto* aboutAction = helpMenu->addAction("About ZAutomate");
     connect(aboutAction, &QAction::triggered, this, [this]() {
         append_activity("Opened about dialog.");
-        statusBar()->showMessage("Qt desktop shell with a hidden Easter egg.", 2500);
+        statusBar()->showMessage("Qt desktop shell for zAutomate (the Reimchen version).", 2500);
     });
 
     auto* toolbar = studio_window_->addToolBar("Main");
@@ -236,9 +400,33 @@ void MainWindow::build_ui() {
     automation_summary_ = new QLabel(automationGroup);
     automation_summary_->setWordWrap(true);
 
+    now_playing_label_ = new QLabel("Now playing: nothing", automationGroup);
+    now_playing_label_->setWordWrap(true);
+    now_playing_time_ = new QLabel("00:00", automationGroup);
+    now_playing_time_->setStyleSheet("color:#148a28;font-weight:700;");
+
+    auto* audioRow = new QHBoxLayout;
+    auto* audioLabel = new QLabel("Output:", automationGroup);
+    audio_output_combo_ = new QComboBox(automationGroup);
+    audio_output_combo_->addItem("Default system output");
+    audio_output_combo_->addItem("Studio monitor");
+    audio_output_combo_->addItem("Air monitor");
+    auto* audioApplyButton = new QPushButton("Apply", automationGroup);
+    audio_output_status_ = new QLabel("Audio routing is ready for a backend hookup.", automationGroup);
+    audio_output_status_->setWordWrap(true);
+    connect(audioApplyButton, &QPushButton::clicked, this, [this]() {
+        if (audio_output_status_ && audio_output_combo_) {
+            audio_output_status_->setText(QString("Selected output: %1").arg(audio_output_combo_->currentText()));
+        }
+        append_activity(QString("Audio output selected: %1").arg(audio_output_combo_ ? audio_output_combo_->currentText() : QString("unknown")));
+    });
+    audioRow->addWidget(audioLabel);
+    audioRow->addWidget(audio_output_combo_, 1);
+    audioRow->addWidget(audioApplyButton);
+
     auto* automationButtons = new QHBoxLayout;
     auto* startButton = new QPushButton("Start", automationGroup);
-    auto* stopButton = new QPushButton("Stop", automationGroup);
+    auto* stopButton = new QPushButton("Pause", automationGroup);
     auto* refreshButton = new QPushButton("Refresh", automationGroup);
     connect(startButton, &QPushButton::clicked, this, [this]() {
         automation_.start();
@@ -249,8 +437,8 @@ void MainWindow::build_ui() {
     connect(stopButton, &QPushButton::clicked, this, [this]() {
         automation_.stop();
         refresh_automation_view();
-        append_activity("Automation stopped softly.");
-        statusBar()->showMessage("Automation stopped softly", 2500);
+        append_activity("Automation paused.");
+        statusBar()->showMessage("Automation paused", 2500);
     });
     connect(refreshButton, &QPushButton::clicked, this, [this]() {
         refresh_automation_view();
@@ -261,11 +449,37 @@ void MainWindow::build_ui() {
     automationButtons->addWidget(refreshButton);
     automationButtons->addStretch(1);
 
-    queue_list_ = new QListWidget(automationGroup);
+    queue_list_ = new QueueDropListWidget([this](const Cart& cart, bool playNext) {
+        prompt_queue_choice_and_enqueue(cart, playNext);
+    }, automationGroup);
     queue_list_->setMinimumHeight(240);
     queue_list_->setItemDelegate(new ElideDelegate(queue_list_));
+    queue_list_->setDragDropMode(QAbstractItemView::DropOnly);
+    queue_list_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(queue_list_, &QListWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        auto* item = queue_list_->itemAt(pos);
+        if (!item) {
+            return;
+        }
+
+        const QString id = item->data(IdRole).toString();
+        const QString label = item->text();
+
+        QMenu menu(queue_list_);
+        menu.addAction("Delete from queue", [this, id, label]() {
+            const bool removed = automation_.remove_cart_by_id(id.toStdString());
+            append_activity(removed ? QString("Removed from queue: %1").arg(label)
+                                    : QString("Queue item not found: %1").arg(label));
+            refresh_automation_view();
+        });
+        menu.exec(queue_list_->viewport()->mapToGlobal(pos));
+    });
 
     automationLayout->addWidget(automation_summary_);
+    automationLayout->addWidget(now_playing_label_);
+    automationLayout->addWidget(now_playing_time_);
+    automationLayout->addLayout(audioRow);
+    automationLayout->addWidget(audio_output_status_);
     automationLayout->addLayout(automationButtons);
     automationLayout->addWidget(queue_list_, 1);
 
@@ -283,10 +497,53 @@ void MainWindow::build_ui() {
     studioSearchRow->addWidget(studio_query_);
     studioSearchRow->addWidget(studio_search_button_);
 
-    studio_results_ = new QListWidget(studioGroup);
+    studio_results_ = new CartDragListWidget(studioGroup);
     studio_results_->setMinimumHeight(240);
     studio_results_->addItem("Type a query to search the studio library.");
     studio_results_->setItemDelegate(new ElideDelegate(studio_results_));
+    studio_results_->setDragEnabled(true);
+    studio_results_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(studio_results_, &QListWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        auto* item = studio_results_->itemAt(pos);
+        if (!item) {
+            return;
+        }
+
+        const QString kind = item->data(KindRole).toString();
+        const QString id = item->data(IdRole).toString();
+        const QString issuer = item->data(IssuerRole).toString();
+        const QString title = item->data(TitleRole).toString();
+        const QString file = item->data(FileRole).toString();
+        const QString type = item->data(TypeRole).toString();
+
+        QMenu menu(studio_results_);
+        menu.addAction("Add to queue", [this, kind, id, issuer, title, file, type]() {
+            Cart cart;
+            cart.cart_id = id.toStdString();
+            cart.title = title.toStdString();
+            cart.issuer = issuer.toStdString();
+            cart.cart_type = type.toStdString();
+            cart.filename = file.toStdString();
+            cart.length_ms = kind == "track" ? 180000 : 20;
+            automation_.append_cart(cart);
+            append_activity(QString("Added to queue: %1 - %2").arg(issuer, title));
+            refresh_automation_view();
+        });
+        menu.addAction("Play next", [this, kind, id, issuer, title, file, type]() {
+            Cart cart;
+            cart.cart_id = id.toStdString();
+            cart.title = title.toStdString();
+            cart.issuer = issuer.toStdString();
+            cart.cart_type = type.toStdString();
+            cart.filename = file.toStdString();
+            cart.length_ms = kind == "track" ? 180000 : 20;
+            prompt_queue_choice_and_enqueue(cart, true);
+        });
+        menu.addAction("Remove from list", [item]() {
+            delete item;
+        });
+        menu.exec(studio_results_->viewport()->mapToGlobal(pos));
+    });
 
     studioLayout->addLayout(studioSearchRow);
     studioLayout->addWidget(studio_results_, 1);
@@ -318,20 +575,48 @@ void MainWindow::build_ui() {
     cart_tree_ = new QTreeWidget(cartGroup); // kept for fallback
     cart_tree_->setVisible(false);
 
-    cartLayout->addWidget(cart_summary_);
-    // Right-aligned reload button styled prominently
-    auto* reloadRow = new QHBoxLayout;
-    reloadRow->addStretch(1);
-    auto* reloadButton = new QPushButton("Reload", cartGroup);
+    auto* cartSplit = new QSplitter(Qt::Horizontal, cartGroup);
+    auto* cartSide = new QWidget(cartSplit);
+    auto* cartSideLayout = new QVBoxLayout(cartSide);
+    cartSideLayout->setContentsMargins(0, 0, 0, 0);
+    cartSideLayout->setSpacing(8);
+
+    cart_current_label_ = new QLabel("Current: none", cartSide);
+    cart_current_label_->setWordWrap(true);
+    cart_current_label_->setStyleSheet("font-weight:700;");
+    cart_next_label_ = new QLabel("Next: none", cartSide);
+    cart_next_label_->setWordWrap(true);
+
+    cart_preview_queue_ = new QListWidget(cartSide);
+    cart_preview_queue_->setMinimumHeight(220);
+    cart_preview_queue_->setItemDelegate(new ElideDelegate(cart_preview_queue_));
+
+    auto* reloadButton = new QPushButton("Reload", cartSide);
     reloadButton->setStyleSheet("background:#d9534f;color:#ffffff;border-radius:4px;padding:6px 10px;font-weight:700;");
     connect(reloadButton, &QPushButton::clicked, this, [this]() {
         refresh_carts_view_async();
         append_activity("Cart grid reload requested.");
     });
-    reloadRow->addWidget(reloadButton);
-    cartLayout->addLayout(reloadRow);
-    cartLayout->addWidget(cart_refresh_button_);
-    cartLayout->addWidget(cart_scroll_, 1);
+
+    cartSideLayout->addWidget(cart_summary_);
+    cartSideLayout->addWidget(cart_current_label_);
+    cartSideLayout->addWidget(cart_next_label_);
+    cartSideLayout->addWidget(cart_preview_queue_, 1);
+    cartSideLayout->addWidget(cart_refresh_button_);
+    cartSideLayout->addWidget(reloadButton);
+
+    auto* cartRight = new QWidget(cartSplit);
+    auto* cartRightLayout = new QVBoxLayout(cartRight);
+    cartRightLayout->setContentsMargins(0, 0, 0, 0);
+    cartRightLayout->setSpacing(8);
+    cartRightLayout->addWidget(cart_scroll_, 1);
+
+    cartSplit->addWidget(cartSide);
+    cartSplit->addWidget(cartRight);
+    cartSplit->setStretchFactor(0, 0);
+    cartSplit->setStretchFactor(1, 1);
+
+    cartLayout->addWidget(cartSplit, 1);
 
     // Build separate central widgets for each top-level window
     auto* studioRoot = new QWidget();
@@ -511,10 +796,16 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::MouseButtonDblClick) {
         if (auto* w = qobject_cast<QWidget*>(watched)) {
             if (w->property("isTile").toBool()) {
-                const QString label = w->property("cartLabel").toString();
-                const QString id = w->property("cartId").toString();
-                if (!id.isEmpty()) {
-                    db_->log_cart(id.toStdString());
+                Cart cart;
+                const auto label = w->property("cartLabel").toString();
+                cart.cart_id = w->property("cartId").toString().toStdString();
+                cart.issuer = label.section('\n', 0, 0).toStdString();
+                cart.title = label.section('\n', 1, 1).toStdString();
+                cart.cart_type = std::to_string(w->property("cartType").toInt());
+                cart.length_ms = w->property("durationMs").toInt();
+                if (!cart.cart_id.empty()) {
+                    db_->log_cart(cart.cart_id);
+                    prompt_queue_choice_and_enqueue(cart, true);
                 }
                 append_activity(QString("Double-click play requested: %1").arg(label));
                 return true;
@@ -524,10 +815,120 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     return QMainWindow::eventFilter(watched, event);
 }
 
+void MainWindow::prompt_queue_choice_and_enqueue(const Cart& cart, bool play_next) {
+    const bool currentlyPlaying = automation_.is_playing();
+    const auto current = automation_.current_cart_snapshot();
+
+    if (currentlyPlaying && current.has_value() && current->cart_id != cart.cart_id) {
+        QMessageBox box(this);
+        box.setWindowTitle("Queue action");
+        box.setText(QString("A cart is already playing: %1 - %2").arg(QString::fromStdString(current->issuer), QString::fromStdString(current->title)));
+        box.setInformativeText("Do you want to replace the current queue or append after the current track?");
+        auto* replaceButton = box.addButton("Replace queue", QMessageBox::AcceptRole);
+        auto* appendButton = box.addButton("Append after current", QMessageBox::ActionRole);
+        auto* cancelButton = box.addButton(QMessageBox::Cancel);
+        box.exec();
+
+        if (box.clickedButton() == cancelButton) {
+            return;
+        }
+        if (box.clickedButton() == replaceButton) {
+            automation_.clear_queue();
+            automation_.enqueue_cart(cart);
+            automation_.start();
+            append_activity(QString("Replaced queue with: %1 - %2").arg(QString::fromStdString(cart.issuer), QString::fromStdString(cart.title)));
+            refresh_automation_view();
+            return;
+        }
+        automation_.append_cart(cart);
+        automation_.start();
+        append_activity(QString("Appended after current: %1 - %2").arg(QString::fromStdString(cart.issuer), QString::fromStdString(cart.title)));
+        refresh_automation_view();
+        return;
+    }
+
+    if (play_next) {
+        automation_.enqueue_cart(cart);
+        automation_.start();
+    } else {
+        automation_.append_cart(cart);
+    }
+    append_activity(QString("Queued: %1 - %2").arg(QString::fromStdString(cart.issuer), QString::fromStdString(cart.title)));
+    refresh_automation_view();
+}
+
+void MainWindow::update_playback_status() {
+    const auto current = automation_.current_cart_snapshot();
+    if (!current.has_value()) {
+        if (now_playing_label_) {
+            now_playing_label_->setText("Now playing: nothing");
+        }
+        if (now_playing_time_) {
+            now_playing_time_->setText("00:00");
+        }
+        return;
+    }
+
+    const auto started = automation_.current_started_at();
+    const auto elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - started).count());
+    const int remainingMs = std::max(0, current->length_ms - elapsedMs);
+    const QString elapsedText = format_duration(std::max(0, elapsedMs));
+    const QString remainingText = format_duration(remainingMs);
+
+    if (now_playing_label_) {
+        now_playing_label_->setText(QString("Now playing: %1 - %2").arg(QString::fromStdString(current->issuer), QString::fromStdString(current->title)));
+    }
+    if (now_playing_time_) {
+        now_playing_time_->setText(QString("%1 remaining • %2 elapsed").arg(remainingText, elapsedText));
+    }
+    sync_cart_preview();
+}
+
+void MainWindow::sync_cart_preview() {
+    const auto current = automation_.current_cart_snapshot();
+    const auto queue = automation_.queue_snapshot();
+
+    if (cart_current_label_) {
+        if (current.has_value()) {
+            const auto started = automation_.current_started_at();
+            const auto elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - started).count());
+            const int remainingMs = std::max(0, current->length_ms - elapsedMs);
+            cart_current_label_->setText(QString("Current: %1 - %2 (%3 left)").arg(QString::fromStdString(current->issuer), QString::fromStdString(current->title), format_duration(remainingMs)));
+        } else {
+            cart_current_label_->setText("Current: none");
+        }
+    }
+
+    if (cart_next_label_) {
+        if (!queue.empty()) {
+            cart_next_label_->setText(QString("Next: %1 - %2").arg(QString::fromStdString(queue.front().issuer), QString::fromStdString(queue.front().title)));
+        } else {
+            cart_next_label_->setText("Next: none");
+        }
+    }
+
+    if (cart_preview_queue_) {
+        cart_preview_queue_->clear();
+        std::size_t count = 0;
+        for (const auto& item : queue) {
+            auto* preview = new QListWidgetItem(QString("%1 - %2 [%3]").arg(QString::fromStdString(item.issuer), QString::fromStdString(item.title), format_duration(item.length_ms)), cart_preview_queue_);
+            preview->setForeground(QBrush(QColor("#1a8a2f")));
+            if (++count >= 8) {
+                break;
+            }
+        }
+        if (queue.empty()) {
+            cart_preview_queue_->addItem("Queue is empty.");
+        }
+    }
+}
+
 void MainWindow::refresh_automation_view() {
     const auto queue = automation_.queue_snapshot();
     update_queue_list(queue);
     update_overview();
+    update_playback_status();
+    sync_cart_preview();
 
     QString summary = queue.empty()
                          ? QString("Automation idle. Start it to load the queue.")
@@ -607,10 +1008,26 @@ void MainWindow::run_studio_search() {
                    [this](const LibrarySearchResult& result) {
                        studio_results_->clear();
                        for (const auto& cart : result.carts) {
-                           studio_results_->addItem("[Cart] " + format_item_line(cart));
+                                       auto* item = new QListWidgetItem("[Cart] " + format_item_line(cart) + QString(" [%1]").arg(format_duration(cart.length_ms)), studio_results_);
+                            item->setData(KindRole, "cart");
+                            item->setData(IdRole, QString::fromStdString(cart.cart_id));
+                            item->setData(IssuerRole, QString::fromStdString(cart.issuer));
+                            item->setData(TitleRole, QString::fromStdString(cart.title));
+                            item->setData(FileRole, QString::fromStdString(cart.filename));
+                            item->setData(TypeRole, QString::fromStdString(cart.cart_type));
+                                       item->setData(DurationRole, format_duration(cart.length_ms));
+                                       item->setForeground(QBrush(QColor("#1a8a2f")));
                        }
                        for (const auto& track : result.tracks) {
-                           studio_results_->addItem(QString("[Track] %1 - %2").arg(QString::fromStdString(track.artist), QString::fromStdString(track.title)));
+                                       auto* item = new QListWidgetItem(QString("[Track] %1 - %2 [%3]").arg(QString::fromStdString(track.artist), QString::fromStdString(track.title), format_duration(track.length_ms)), studio_results_);
+                            item->setData(KindRole, "track");
+                            item->setData(IdRole, QString::fromStdString(track.track_id));
+                            item->setData(IssuerRole, QString::fromStdString(track.artist));
+                            item->setData(TitleRole, QString::fromStdString(track.title));
+                            item->setData(FileRole, QString::fromStdString(track.filename));
+                            item->setData(TypeRole, QString::fromStdString(track.rotation));
+                                       item->setData(DurationRole, format_duration(track.length_ms));
+                                       item->setForeground(QBrush(QColor("#1a8a2f")));
                        }
                        if (studio_results_->count() == 0) {
                            studio_results_->addItem("No results found.");
@@ -660,11 +1077,19 @@ void MainWindow::append_activity(const QString& message) {
 void MainWindow::update_queue_list(const std::vector<Cart>& queue) {
     queue_list_->clear();
     for (const auto& cart : queue) {
-        queue_list_->addItem(QString::fromStdString(cart.issuer + " - " + cart.title));
+        auto* item = new QListWidgetItem(QString::fromStdString(cart.issuer + " - " + cart.title), queue_list_);
+        item->setData(IdRole, QString::fromStdString(cart.cart_id));
+        item->setData(IssuerRole, QString::fromStdString(cart.issuer));
+        item->setData(TitleRole, QString::fromStdString(cart.title));
+        item->setData(TypeRole, QString::fromStdString(cart.cart_type));
+        item->setData(DurationRole, format_duration(cart.length_ms));
+        item->setData(LengthRole, cart.length_ms);
+        item->setForeground(QBrush(QColor("#1a8a2f")));
     }
     if (queue.empty()) {
         queue_list_->addItem("Queue is currently empty.");
     }
+    sync_cart_preview();
 }
 
 void MainWindow::update_cart_tree(const std::unordered_map<int, std::vector<Cart>>& carts_by_type) {
@@ -699,6 +1124,7 @@ void MainWindow::update_cart_tree(const std::unordered_map<int, std::vector<Cart
             tile->setProperty("cartType", type);
             tile->setProperty("isTile", true);
             tile->setProperty("cartId", QString::fromStdString(cart.cart_id));
+            tile->setProperty("durationMs", cart.length_ms);
             tile->installEventFilter(this);
             tile->setContextMenuPolicy(Qt::CustomContextMenu);
             connect(tile, &QWidget::customContextMenuRequested, this, [this, tile, cart](const QPoint& pos) {
@@ -722,9 +1148,7 @@ void MainWindow::update_cart_tree(const std::unordered_map<int, std::vector<Cart
                                    },
                                    [this, cart](bool) {
                                        // enqueue into automation and ensure it is started
-                                       automation_.enqueue_cart(cart);
-                                       automation_.start();
-                                       append_activity(QString("Play requested: %1 - %2").arg(QString::fromStdString(cart.issuer), QString::fromStdString(cart.title)));
+                                       prompt_queue_choice_and_enqueue(cart, true);
                                    });
                 });
                 menu.addAction("Reveal file", [this, cart]() {

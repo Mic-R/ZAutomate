@@ -58,6 +58,7 @@ void CartQueue::start() {
 void CartQueue::stop_soft() {
     std::lock_guard<std::mutex> lock(mutex_);
     is_playing_ = false;
+    cv_.notify_all();
 }
 
 std::vector<Cart> CartQueue::get_queue_snapshot() const {
@@ -68,6 +69,21 @@ std::vector<Cart> CartQueue::get_queue_snapshot() const {
 std::size_t CartQueue::played_count() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return played_.size();
+}
+
+std::optional<Cart> CartQueue::current_cart_snapshot() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return current_cart_;
+}
+
+std::chrono::system_clock::time_point CartQueue::current_started_at() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return current_started_at_;
+}
+
+bool CartQueue::is_playing() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return is_playing_ && active_track_;
 }
 
 bool CartQueue::wait_until_idle(std::chrono::milliseconds timeout) {
@@ -272,6 +288,8 @@ void CartQueue::worker_loop() {
             current = queue_.front();
             queue_.pop_front();
             active_track_ = true;
+            current_cart_ = current;
+            current_started_at_ = std::chrono::system_clock::now();
         }
 
         if (on_cart_start_) {
@@ -301,6 +319,7 @@ void CartQueue::worker_loop() {
             std::lock_guard<std::mutex> lock(mutex_);
             played_.push_back(current);
             active_track_ = false;
+            current_cart_.reset();
 
             if (queue_.size() < playlist_min_length_) {
                 played_.clear();
@@ -329,6 +348,37 @@ void CartQueue::enqueue_cart(const Cart& cart) {
     // recalculate start times
     generate_start_times_locked(0);
     cv_.notify_all();
+}
+
+void CartQueue::append_cart(const Cart& cart) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    queue_.push_back(cart);
+    generate_start_times_locked(queue_.empty() ? 0 : queue_.size() - 1);
+    cv_.notify_all();
+}
+
+void CartQueue::clear_queue() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    queue_.clear();
+    cv_.notify_all();
+}
+
+bool CartQueue::remove_cart_by_id(const std::string& cart_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto it = std::find_if(queue_.begin(), queue_.end(), [&cart_id](const Cart& cart) {
+        return cart.cart_id == cart_id;
+    });
+    if (it == queue_.end()) {
+        return false;
+    }
+
+    const std::size_t index = static_cast<std::size_t>(std::distance(queue_.begin(), it));
+    queue_.erase(it);
+    if (!queue_.empty()) {
+        generate_start_times_locked(index == 0 ? 0 : index - 1);
+    }
+    cv_.notify_all();
+    return true;
 }
 
 }  // namespace zautomate

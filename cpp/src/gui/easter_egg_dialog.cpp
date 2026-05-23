@@ -18,7 +18,7 @@ EasterEggDialog::EasterEggDialog(QWidget* parent)
     root->setContentsMargins(24, 24, 24, 24);
     root->setSpacing(16);
 
-    auto* title = new QLabel("You found the hidden card.");
+    auto* title = new QLabel("Wow such secret card!");
     title->setObjectName("easterEggTitle");
     title->setWordWrap(true);
 
