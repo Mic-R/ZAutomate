@@ -517,26 +517,34 @@ void MainWindow::build_ui() {
         const QString type = item->data(TypeRole).toString();
 
         QMenu menu(studio_results_);
-        menu.addAction("Add to queue", [this, kind, id, issuer, title, file, type]() {
+        menu.addAction("Add to queue", [this, item, kind, id, issuer, title, file, type]() {
             Cart cart;
             cart.cart_id = id.toStdString();
             cart.title = title.toStdString();
             cart.issuer = issuer.toStdString();
             cart.cart_type = type.toStdString();
             cart.filename = file.toStdString();
-            cart.length_ms = kind == "track" ? 180000 : 20;
+            int length_ms = (kind == "track") ? parse_duration_ms_from_item(item) : 20;
+            if (length_ms <= 0 && kind == "track") {
+                length_ms = 180000;
+            }
+            cart.length_ms = length_ms;
             automation_.append_cart(cart);
             append_activity(QString("Added to queue: %1 - %2").arg(issuer, title));
             refresh_automation_view();
         });
-        menu.addAction("Play next", [this, kind, id, issuer, title, file, type]() {
+        menu.addAction("Play next", [this, item, kind, id, issuer, title, file, type]() {
             Cart cart;
             cart.cart_id = id.toStdString();
             cart.title = title.toStdString();
             cart.issuer = issuer.toStdString();
             cart.cart_type = type.toStdString();
             cart.filename = file.toStdString();
-            cart.length_ms = kind == "track" ? 180000 : 20;
+            int length_ms = (kind == "track") ? parse_duration_ms_from_item(item) : 20;
+            if (length_ms <= 0 && kind == "track") {
+                length_ms = 180000;
+            }
+            cart.length_ms = length_ms;
             prompt_queue_choice_and_enqueue(cart, true);
         });
         menu.addAction("Remove from list", [item]() {

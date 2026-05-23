@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <string>
+#include <regex>
 
 namespace zautomate {
 
@@ -46,7 +47,19 @@ std::string build_query(CURL* curl, const std::vector<std::pair<std::string, std
 }
 
 int estimate_length_ms_from_title(const std::string& title) {
-    return 180000 + static_cast<int>(title.size() % 3000);
+    try {
+        static const std::regex re(R"((\d{1,2}):(\d{2}))");
+        std::smatch m;
+        if (std::regex_search(title, m, re) && m.size() >= 3) {
+            const int minutes = std::stoi(m[1].str());
+            const int seconds = std::stoi(m[2].str());
+            return minutes * 60 * 1000 + seconds * 1000;
+        }
+    } catch (...) {
+        // fall through to default
+    }
+    // Fallback default length: 3 minutes
+    return 180000;
 }
 
 std::string json_string_or_empty(const nlohmann::json& value) {
