@@ -2,6 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "SCRIPT_DIR=%~dp0"
+set "SOURCE_DIR=%SCRIPT_DIR%"
 set "DEFAULT_INSTALL_DIR=%LocalAppData%\Programs\zautomate"
 set "LICENSE_FILE=%SCRIPT_DIR%LICENSE"
 set "APP_EXE=%SCRIPT_DIR%zautomate.exe"
@@ -42,19 +43,16 @@ if "%INSTALL_DIR%"=="" set "INSTALL_DIR=%DEFAULT_INSTALL_DIR%"
 
 echo.
 echo Installing to "%INSTALL_DIR%"
-mkdir "%INSTALL_DIR%" 2>nul
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%" 2>nul
 if errorlevel 1 (
   echo Error: could not create install directory.
   pause
   exit /b 1
 )
 
-copy /Y "%APP_EXE%" "%INSTALL_DIR%\" >nul || goto :copy_failed
-copy /Y "%CURL_DLL%" "%INSTALL_DIR%\" >nul || goto :copy_failed
-
-for %%F in (*.dll) do (
-  if /I not "%%~nxF"=="libcurl.dll" copy /Y "%%~fF" "%INSTALL_DIR%\" >nul
-)
+robocopy "%SOURCE_DIR%" "%INSTALL_DIR%" /E /COPY:DAT /DCOPY:DAT /R:1 /W:1 /NFL /NDL /NJH /NJS >nul
+set "ROBOCOPY_EXIT=%ERRORLEVEL%"
+if %ROBOCOPY_EXIT% GEQ 8 goto :copy_failed
 
 if exist "%LICENSE_FILE%" copy /Y "%LICENSE_FILE%" "%INSTALL_DIR%\LICENSE.txt" >nul
 
@@ -97,6 +95,6 @@ pause
 exit /b 0
 
 :copy_failed
-echo Error: failed to copy one or more files.
+echo Error: failed to copy the release directory contents.
 pause
 exit /b 1
