@@ -10,6 +10,11 @@
 #include <cctype>
 #include <string>
 #include <regex>
+#include <array>
+#include <cstdio>
+#include <memory>
+#include <sys/stat.h>
+#include <sstream>
 
 namespace zautomate {
 
@@ -60,6 +65,52 @@ int estimate_length_ms_from_title(const std::string& title) {
     }
     // Fallback default length: 3 minutes
     return 180000;
+}
+
+// Check file exists
+static bool file_exists(const std::string& path) {
+    struct stat sb;
+    return stat(path.c_str(), &sb) == 0;
+}
+
+// Escape a string for a single-quoted shell argument
+static std::string shell_escape(const std::string& s) {
+    std::string out = "'";
+    for (char c : s) {
+        if (c == '\'') {
+            out += "'\"'\"'";
+        } else {
+            out.push_back(c);
+        }
+    }
+    out += "'";
+    return out;
+}
+
+// Probe media file duration using ffprobe; return milliseconds or 0 if unknown
+static int probe_media_duration_ms(const std::string& path) {
+    if (!file_exists(path)) return 0;
+    // Build command
+    const std::string cmd = std::string("ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 ") + shell_escape(path);
+    std::array<char, 256> buf{};
+    std::string result;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+    if (!pipe) return 0;
+    while (fgets(buf.data(), static_cast<int>(buf.size()), pipe.get()) != nullptr) {
+        result += buf.data();
+    }
+    if (result.empty()) return 0;
+    // parse as double seconds
+    try {
+        std::stringstream ss(result);
+        double seconds = 0.0;
+        ss >> seconds;
+        if (seconds > 0.0) {
+            return static_cast<int>(seconds * 1000.0 + 0.5);
+        }
+    } catch (...) {
+    }
+    return 0;
 }
 
 std::string json_string_or_empty(const nlohmann::json& value) {
@@ -269,7 +320,9 @@ std::optional<Cart> DatabaseClient::get_cart(const std::string& cart_type) {
         cart.issuer = json_string_or_default(json, "issuer", "");
         cart.cart_type = json_string_or_default(json, "type", cart_type);
         cart.filename = library_prefix_ + "carts/" + json_string_or_default(json, "filename", "");
-        cart.length_ms = estimate_length_ms_from_title(cart.title);
+        // Try probing media file for accurate duration, fallback to title estimate
+        int dur = probe_media_duration_ms(cart.filename);
+        cart.length_ms = dur > 0 ? dur : estimate_length_ms_from_title(cart.title);
 
         if (!cart.filename.empty()) {
             return cart;
@@ -301,7 +354,9 @@ std::vector<Track> DatabaseClient::get_playlist(int show_id) {
         track.artist = item.value("artist_name", "");
         track.rotation = item.value("rotation", "rotation");
         track.filename = library_prefix_ + item.value("file_name", "");
-        track.length_ms = estimate_length_ms_from_title(track.title);
+        // Try probing media file for accurate duration, fallback to title estimate
+        int dur = probe_media_duration_ms(track.filename);
+        track.length_ms = dur > 0 ? dur : estimate_length_ms_from_title(track.title);
 
         if (!track.filename.empty()) {
             playlist.push_back(std::move(track));
@@ -335,7 +390,8 @@ std::unordered_map<int, std::vector<Cart>> DatabaseClient::get_carts() {
             cart.issuer = json_string_or_default(item, "issuer", "");
             cart.cart_type = json_string_or_default(item, "type", "");
             cart.filename = library_prefix_ + "carts/" + json_string_or_default(item, "filename", "");
-            cart.length_ms = estimate_length_ms_from_title(cart.title);
+            int dur = probe_media_duration_ms(cart.filename);
+            cart.length_ms = dur > 0 ? dur : estimate_length_ms_from_title(cart.title);
 
             if (!cart.filename.empty()) {
                 carts[cart_type].push_back(std::move(cart));
@@ -384,7 +440,8 @@ LibrarySearchResult DatabaseClient::search_library(const std::string& query) {
             t.artist = json_string_or_default(item, "artist_name", "");
             t.rotation = json_string_or_default(item, "rotation", "rotation");
             t.filename = library_prefix_ + json_string_or_default(item, "file_name", "");
-            t.length_ms = estimate_length_ms_from_title(t.title);
+                int dur = probe_media_duration_ms(t.filename);
+                t.length_ms = dur > 0 ? dur : estimate_length_ms_from_title(t.title);
             if (!t.filename.empty()) {
                 out.tracks.push_back(std::move(t));
             }

@@ -336,7 +336,7 @@ void MainWindow::build_ui() {
         append_activity("Refreshed all views.");
     });
     auto* quitAction = fileMenu->addAction("Exit");
-    connect(quitAction, &QAction::triggered, this, &QWidget::close);
+    connect(quitAction, &QAction::triggered, qApp, &QCoreApplication::quit);
 
     auto* toolsMenu = studio_window_->menuBar()->addMenu("Tools");
     search_action_ = toolsMenu->addAction("Run studio search");
@@ -351,7 +351,9 @@ void MainWindow::build_ui() {
     auto* aboutAction = helpMenu->addAction("About ZAutomate");
     connect(aboutAction, &QAction::triggered, this, [this]() {
         append_activity("Opened about dialog.");
-        statusBar()->showMessage("Qt desktop shell for zAutomate (the Reimchen version).", 2500);
+        const QString ver = QString::fromUtf8(ZAUTOMATE_VERSION);
+        const QString about_text = QString("ZAutomate %1\n\nQt desktop shell for zAutomate (the Reimchen version).\n\nCopyright Michael Reimchen (michael@reimchen.org)\n").arg(ver);
+        QMessageBox::about(studio_window_, "About ZAutomate", about_text);
     });
 
     auto* toolbar = studio_window_->addToolBar("Main");

@@ -1,6 +1,6 @@
 {
   "name": "zautomate-cpp",
-  "version-string": "1.0.0",
+  "version-string": "2.1.2",
   "dependencies": [
     "curl",
     "nlohmann-json"
