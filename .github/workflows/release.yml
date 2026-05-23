@@ -110,6 +110,25 @@ jobs:
           $bundleDir = Join-Path $env:GITHUB_WORKSPACE 'dist\zautomate-windows'
           New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
           Copy-Item 'cpp\build\Release\zautomate.exe' $bundleDir
+
+          # Ensure libcurl.dll is present in the bundle root.
+          $curlCandidates = @(
+            (Join-Path $env:GITHUB_WORKSPACE 'libcurl.dll'),
+            (Join-Path $env:GITHUB_WORKSPACE 'cpp\build\Release\libcurl.dll'),
+            (Join-Path $env:GITHUB_WORKSPACE 'vcpkg\installed\x64-windows\bin\libcurl.dll')
+          )
+          $curlDll = $null
+          foreach ($candidate in $curlCandidates) {
+            if (Test-Path $candidate) {
+              $curlDll = $candidate
+              break
+            }
+          }
+          if (-not $curlDll) {
+            throw 'libcurl.dll not found in expected locations; cannot create runnable Windows bundle.'
+          }
+          Copy-Item $curlDll $bundleDir -Force
+
           & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --compiler-runtime $bundleDir\zautomate.exe
           Compress-Archive -Path "$bundleDir\*" -DestinationPath 'cpp\build\packages\zautomate-windows-bundle.zip' -Force
 
