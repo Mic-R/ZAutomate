@@ -35,31 +35,32 @@ public:
             .title = cart_type,
             .issuer = "CartIssuer-" + cart_type,
             .cart_type = cart_type,
+            .filename = "/bin/ls",
             .length_ms = 20,
         };
     }
 
     std::vector<zautomate::Track> get_playlist(int show_id) override {
         return {
-            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-1", .title = "T1", .artist = "ArtistA", .rotation = "rotation", .length_ms = 30},
-            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-2", .title = "T2", .artist = "ArtistB", .rotation = "rotation", .length_ms = 30},
-            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-3", .title = "T3", .artist = "ArtistC", .rotation = "rotation", .length_ms = 30},
+            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-1", .title = "T1", .artist = "ArtistA", .rotation = "rotation", .filename = "/bin/ls", .length_ms = 30},
+            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-2", .title = "T2", .artist = "ArtistB", .rotation = "rotation", .filename = "/bin/ls", .length_ms = 30},
+            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-3", .title = "T3", .artist = "ArtistC", .rotation = "rotation", .filename = "/bin/ls", .length_ms = 30},
         };
     }
 
     std::unordered_map<int, std::vector<zautomate::Cart>> get_carts() override {
         return {
-            {0, {zautomate::Cart{.cart_id = "c0", .title = "PSA", .issuer = "WSBF", .cart_type = "PSA", .length_ms = 20}}},
-            {1, {zautomate::Cart{.cart_id = "c1", .title = "UW", .issuer = "WSBF", .cart_type = "Underwriting", .length_ms = 20}}},
-            {2, {zautomate::Cart{.cart_id = "c2", .title = "ID", .issuer = "WSBF", .cart_type = "StationID", .length_ms = 20}}},
-            {3, {zautomate::Cart{.cart_id = "c3", .title = "Promo", .issuer = "WSBF", .cart_type = "Promotion", .length_ms = 20}}},
+            {0, {zautomate::Cart{.cart_id = "c0", .title = "PSA", .issuer = "WSBF", .cart_type = "PSA", .filename = "/bin/ls", .length_ms = 20}}},
+            {1, {zautomate::Cart{.cart_id = "c1", .title = "UW", .issuer = "WSBF", .cart_type = "Underwriting", .filename = "/bin/ls", .length_ms = 20}}},
+            {2, {zautomate::Cart{.cart_id = "c2", .title = "ID", .issuer = "WSBF", .cart_type = "StationID", .filename = "/bin/ls", .length_ms = 20}}},
+            {3, {zautomate::Cart{.cart_id = "c3", .title = "Promo", .issuer = "WSBF", .cart_type = "Promotion", .filename = "/bin/ls", .length_ms = 20}}},
         };
     }
 
     zautomate::LibrarySearchResult search_library(const std::string& query) override {
         zautomate::LibrarySearchResult result;
-        result.carts.push_back(zautomate::Cart{.cart_id = "s-2", .title = "Cart " + query, .issuer = "WSBF", .cart_type = "PSA", .length_ms = 20});
-        result.tracks.push_back(zautomate::Track{.track_id = "s-1", .title = "Result " + query, .artist = "ArtistX", .rotation = "rotation", .length_ms = 30});
+        result.carts.push_back(zautomate::Cart{.cart_id = "s-2", .title = "Cart " + query, .issuer = "WSBF", .cart_type = "PSA", .filename = "/bin/ls", .length_ms = 20});
+        result.tracks.push_back(zautomate::Track{.track_id = "s-1", .title = "Result " + query, .artist = "ArtistX", .rotation = "rotation", .filename = "/bin/ls", .length_ms = 30});
         return result;
     }
 
@@ -147,6 +148,45 @@ int test_cart_queue_deduplicates_artists() {
     return 0;
 }
 
+int test_cart_queue_skips_missing_files() {
+    MockDatabase db;
+    std::atomic<int> starts{0};
+    std::atomic<int> stops{0};
+
+    zautomate::CartQueue queue(
+        db,
+        [&starts](const zautomate::Cart&) { ++starts; },
+        [&stops](const zautomate::Cart&) { ++stops; },
+        0,
+        1);
+
+    queue.append_cart(zautomate::Cart{
+        .cart_id = "missing",
+        .title = "Missing File",
+        .issuer = "WSBF",
+        .cart_type = "rotation",
+        .filename = "/definitely/not/present/audio-file.wav",
+        .length_ms = 20,
+    });
+    queue.append_cart(zautomate::Cart{
+        .cart_id = "present",
+        .title = "Present File",
+        .issuer = "WSBF",
+        .cart_type = "rotation",
+        .filename = "/bin/ls",
+        .length_ms = 20,
+    });
+
+    queue.start();
+    const bool idle = queue.wait_until_idle(std::chrono::seconds(2));
+    queue.stop_soft();
+
+    ASSERT_TRUE(idle);
+    ASSERT_TRUE(starts.load() == 1);
+    ASSERT_TRUE(stops.load() == 1);
+    return 0;
+}
+
 int test_integrated_modules() {
     auto db = std::make_unique<MockDatabase>();
     zautomate::UnifiedApp* app_ptr = nullptr;
@@ -179,6 +219,9 @@ int main() {
         return EXIT_FAILURE;
     }
     if (test_cart_queue_deduplicates_artists() != 0) {
+        return EXIT_FAILURE;
+    }
+    if (test_cart_queue_skips_missing_files() != 0) {
         return EXIT_FAILURE;
     }
     if (test_integrated_modules() != 0) {

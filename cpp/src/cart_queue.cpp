@@ -4,6 +4,7 @@
 #include <cmath>
 #include <ctime>
 #include <exception>
+#include <filesystem>
 #include <future>
 #include <optional>
 
@@ -25,6 +26,11 @@ std::tm localtime_safe(const std::time_t& time_value) {
     localtime_r(&time_value, &tm);
 #endif
     return tm;
+}
+
+bool file_exists(const std::string& path) {
+    std::error_code ec;
+    return !path.empty() && std::filesystem::exists(std::filesystem::path(path), ec);
 }
 
 }  // namespace
@@ -298,6 +304,14 @@ void CartQueue::worker_loop() {
 
             current = queue_.front();
             queue_.pop_front();
+
+            if (!file_exists(current.filename)) {
+                Logger::log(LogLevel::kWarn,
+                            "CartQueue",
+                            "Skipping missing file for " + current.cart_id + ": " + current.filename);
+                continue;
+            }
+
             active_track_ = true;
             current_cart_ = current;
             current_started_at_ = std::chrono::system_clock::now();
