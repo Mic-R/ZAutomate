@@ -38,11 +38,21 @@ AutomationModule::AutomationModule(DatabaseProvider& db)
           [](const Cart& cart) {
               Logger::log(LogLevel::kInfo, "Automation", "STOP   " + cart.issuer + " - " + cart.title);
           },
+          [this](const std::string& warning) {
+              Logger::log(LogLevel::kWarn, "Automation", warning);
+              if (on_warning_callback_) {
+                  on_warning_callback_(warning);
+              }
+          },
           10,
           4) {}
 
 void AutomationModule::set_on_cart_start(std::function<void(const Cart&)> callback) {
     on_cart_start_callback_ = std::move(callback);
+}
+
+void AutomationModule::set_on_warning(std::function<void(const std::string&)> callback) {
+    on_warning_callback_ = std::move(callback);
 }
 
 void AutomationModule::start() {

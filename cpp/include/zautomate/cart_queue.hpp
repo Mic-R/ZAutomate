@@ -26,10 +26,12 @@ struct CartRule {
 class CartQueue {
 public:
     using CartCallback = std::function<void(const Cart&)>;
+    using WarningCallback = std::function<void(const std::string&)>;
 
     CartQueue(DatabaseProvider& db,
               CartCallback on_cart_start,
               CartCallback on_cart_stop,
+              WarningCallback on_warning,
               std::size_t playlist_min_length = 10,
               std::size_t prefetch_workers = 4);
 
@@ -67,6 +69,7 @@ private:
     DatabaseProvider& db_;
     CartCallback on_cart_start_;
     CartCallback on_cart_stop_;
+    WarningCallback on_warning_;
     std::size_t playlist_min_length_;
 
     mutable std::mutex mutex_;

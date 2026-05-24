@@ -10,6 +10,7 @@
 
 #include <QDateTime>
 #include <QApplication>
+#include <QDialog>
 #include <QStyledItemDelegate>
 #include <QEvent>
 #include <QGroupBox>
@@ -27,6 +28,7 @@
 #include <QColor>
 #include <QShortcut>
 #include <QStatusBar>
+#include <QPlainTextEdit>
 #include <QThreadPool>
 #include <QTimer>
 #include <QSplitter>
@@ -292,6 +294,15 @@ MainWindow::MainWindow(std::unique_ptr<DatabaseProvider> db_client, QWidget* par
         QMetaObject::invokeMethod(this, [this, cart]() {
             refresh_automation_view();
             append_activity(QString("Cart started: %1 - %2").arg(QString::fromStdString(cart.issuer), QString::fromStdString(cart.title)));
+        }, Qt::QueuedConnection);
+    });
+    automation_.set_on_warning([this](const std::string& warning) {
+        QMetaObject::invokeMethod(this, [this, warning]() {
+            const QString message = QString::fromStdString(warning);
+            append_playback_warning(message);
+            if (studio_window_ && studio_window_->statusBar()) {
+                studio_window_->statusBar()->showMessage(message, 5000);
+            }
         }, Qt::QueuedConnection);
     });
     playback_timer_ = new QTimer(this);
@@ -1082,6 +1093,34 @@ void MainWindow::append_activity(const QString& message) {
     const auto entry = QDateTime::currentDateTime().toString("HH:mm:ss") + "  " + message;
     activity_log_->addItem(entry);
     activity_log_->scrollToBottom();
+}
+
+void MainWindow::append_playback_warning(const QString& message) {
+    if (!playback_error_window_) {
+        playback_error_window_ = new QDialog(studio_window_);
+        playback_error_window_->setWindowTitle("Playback errors");
+        playback_error_window_->setWindowModality(Qt::NonModal);
+        playback_error_window_->setAttribute(Qt::WA_DeleteOnClose, false);
+
+        auto* layout = new QVBoxLayout(playback_error_window_);
+        auto* label = new QLabel("Missing files are appended here while playback continues.", playback_error_window_);
+        playback_error_log_ = new QPlainTextEdit(playback_error_window_);
+        playback_error_log_->setReadOnly(true);
+        playback_error_log_->setMinimumSize(520, 220);
+        layout->addWidget(label);
+        layout->addWidget(playback_error_log_);
+    }
+
+    if (playback_error_log_) {
+        playback_error_log_->appendPlainText(QDateTime::currentDateTime().toString("HH:mm:ss") + "  " + message);
+    }
+
+    if (!playback_error_window_->isVisible()) {
+        playback_error_window_->show();
+    }
+    playback_error_window_->raise();
+    playback_error_window_->activateWindow();
+    QApplication::alert(playback_error_window_, 0);
 }
 
 void MainWindow::update_queue_list(const std::vector<Cart>& queue) {

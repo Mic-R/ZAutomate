@@ -104,6 +104,7 @@ int test_cart_queue_runs_and_logs() {
         db,
         [&starts](const zautomate::Cart&) { ++starts; },
         [&stops](const zautomate::Cart&) { ++stops; },
+        [](const std::string&) {},
         6,
         4);
 
@@ -126,6 +127,7 @@ int test_cart_queue_deduplicates_artists() {
         db,
         [](const zautomate::Cart&) {},
         [](const zautomate::Cart&) {},
+        [](const std::string&) {},
         10,
         4);
 
@@ -157,6 +159,7 @@ int test_cart_queue_skips_missing_files() {
         db,
         [&starts](const zautomate::Cart&) { ++starts; },
         [&stops](const zautomate::Cart&) { ++stops; },
+        [](const std::string&) {},
         0,
         1);
 

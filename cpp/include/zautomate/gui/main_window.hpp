@@ -14,6 +14,8 @@
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QDialog;
+class QPlainTextEdit;
 class QPushButton;
 class QTreeWidget;
 class QToolBar;
@@ -46,6 +48,7 @@ private:
     void show_easter_egg();
     void set_busy(bool busy, const QString& message = QString());
     void append_activity(const QString& message);
+    void append_playback_warning(const QString& message);
     void update_playback_status();
     void prompt_queue_choice_and_enqueue(const Cart& cart, bool play_next);
     void sync_cart_preview();
@@ -70,6 +73,8 @@ private:
     QGridLayout* cart_grid_layout_{nullptr};
     QScrollArea* cart_scroll_{nullptr};
     QListWidget* activity_log_{nullptr};
+    QDialog* playback_error_window_{nullptr};
+    QPlainTextEdit* playback_error_log_{nullptr};
     QLabel* now_playing_label_{nullptr};
     QLabel* now_playing_time_{nullptr};
     QTimer* playback_timer_{nullptr};

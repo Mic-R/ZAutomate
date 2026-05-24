@@ -27,6 +27,7 @@ public:
     void clear_queue();
     bool remove_cart_by_id(const std::string& cart_id);
     void set_on_cart_start(std::function<void(const Cart&)> callback);
+    void set_on_warning(std::function<void(const std::string&)> callback);
     [[nodiscard]] std::size_t played_count() const;
     [[nodiscard]] std::vector<Cart> queue_snapshot() const;
     [[nodiscard]] std::optional<Cart> current_cart_snapshot() const;
@@ -36,6 +37,7 @@ public:
 private:
     CartQueue queue_;
     std::function<void(const Cart&)> on_cart_start_callback_;
+    std::function<void(const std::string&)> on_warning_callback_;
 };
 
 class StudioModule {

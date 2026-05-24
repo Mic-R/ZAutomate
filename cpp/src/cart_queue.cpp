@@ -38,11 +38,13 @@ bool file_exists(const std::string& path) {
 CartQueue::CartQueue(DatabaseProvider& db,
                      CartCallback on_cart_start,
                      CartCallback on_cart_stop,
+                                         WarningCallback on_warning,
                      std::size_t playlist_min_length,
                      std::size_t prefetch_workers)
     : db_(db),
       on_cart_start_(std::move(on_cart_start)),
       on_cart_stop_(std::move(on_cart_stop)),
+            on_warning_(std::move(on_warning)),
       playlist_min_length_(playlist_min_length),
       show_id_(-1),
       is_playing_(false),
@@ -309,6 +311,9 @@ void CartQueue::worker_loop() {
                 Logger::log(LogLevel::kWarn,
                             "CartQueue",
                             "Skipping missing file for " + current.cart_id + ": " + current.filename);
+                if (on_warning_) {
+                    on_warning_("Skipping missing file for " + current.issuer + " - " + current.title + " (" + current.filename + ")");
+                }
                 continue;
             }
 
