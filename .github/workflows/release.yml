@@ -96,6 +96,53 @@ jobs:
         if: runner.os == 'Linux'
         run: cpack --config cpp/build/CPackConfig.cmake -B cpp/build/packages
 
+      - name: Bundle Qt libs (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          APP_PATH=$(find cpp/build -maxdepth 3 -type d -name '*.app' -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app bundle found under cpp/build; ensure the project is built as a macOS bundle." && exit 1
+          fi
+          echo "Found app bundle: $APP_PATH"
+          MACDEPLOYQT="$(brew --prefix qt)/bin/macdeployqt"
+          if [ ! -x "$MACDEPLOYQT" ]; then
+            echo "macdeployqt not found at $MACDEPLOYQT; ensure Qt is installed via brew." && exit 1
+          fi
+          "$MACDEPLOYQT" "$APP_PATH"
+
+      - name: Bundle non-Qt dylibs (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          APP_PATH=$(find cpp/build -maxdepth 3 -type d -name '*.app' -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app bundle found under cpp/build; cannot bundle non-Qt dylibs." && exit 1
+          fi
+          APP_BIN=$(find "$APP_PATH/Contents/MacOS" -type f -perm +111 -print -quit)
+          if [ -z "$APP_BIN" ]; then
+            echo "No executable found in $APP_PATH/Contents/MacOS" && exit 1
+          fi
+          echo "App: $APP_PATH  Bin: $APP_BIN"
+          FRAMEWORKS="$APP_PATH/Contents/Frameworks"
+          mkdir -p "$FRAMEWORKS"
+
+          # Find absolute, non-system dylib deps (homebrew / local) used by the app
+          DEPS=$(otool -L "$APP_BIN" | awk '{print $1}' | grep -E '^/opt/homebrew|^/usr/local' | grep -E 'libcurl|libssl|libcrypto|nghttp2' | sort -u || true)
+          if [ -z "$DEPS" ]; then
+            echo "No non-system dylib deps found to bundle." && exit 0
+          fi
+          echo "Bundling deps: $DEPS"
+
+          for dep in $DEPS; do
+            cp -f "$dep" "$FRAMEWORKS/"
+            BASENAME=$(basename "$dep")
+            # Set the id of the copied dylib to be relative to the bundle
+            install_name_tool -id "@rpath/$BASENAME" "$FRAMEWORKS/$BASENAME" || true
+            # Change app binary reference to point into Frameworks
+            install_name_tool -change "$dep" "@executable_path/../Frameworks/$BASENAME" "$APP_BIN" || true
+            # Ensure app will search Frameworks at runtime
+            install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_BIN" || true
+          done
+
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: cpack --config cpp/build/CPackConfig.cmake -B cpp/build/packages
