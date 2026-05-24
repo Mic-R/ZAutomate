@@ -188,7 +188,7 @@ int test_cart_queue_skips_missing_files() {
         .title = "Present File",
         .issuer = "WSBF",
         .cart_type = "rotation",
-        .filename = "/bin/ls",
+        .filename = MockDatabase::playable_stub_path(),
         .length_ms = 20,
     });
 
