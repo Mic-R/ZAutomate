@@ -1,6 +1,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <set>
@@ -25,6 +27,16 @@ namespace {
 
 class MockDatabase final : public zautomate::DatabaseProvider {
 public:
+    static std::string playable_stub_path() {
+        static const std::string path = []() {
+            auto stub = std::filesystem::temp_directory_path() / "zautomate_playable_stub.dat";
+            std::ofstream file(stub, std::ios::binary | std::ios::trunc);
+            file << "stub";
+            return stub.string();
+        }();
+        return path;
+    }
+
     int get_new_show_id(int previous_show_id) override {
         return previous_show_id + 1;
     }
@@ -35,32 +47,32 @@ public:
             .title = cart_type,
             .issuer = "CartIssuer-" + cart_type,
             .cart_type = cart_type,
-            .filename = "/bin/ls",
+            .filename = playable_stub_path(),
             .length_ms = 20,
         };
     }
 
     std::vector<zautomate::Track> get_playlist(int show_id) override {
         return {
-            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-1", .title = "T1", .artist = "ArtistA", .rotation = "rotation", .filename = "/bin/ls", .length_ms = 30},
-            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-2", .title = "T2", .artist = "ArtistB", .rotation = "rotation", .filename = "/bin/ls", .length_ms = 30},
-            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-3", .title = "T3", .artist = "ArtistC", .rotation = "rotation", .filename = "/bin/ls", .length_ms = 30},
+            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-1", .title = "T1", .artist = "ArtistA", .rotation = "rotation", .filename = playable_stub_path(), .length_ms = 30},
+            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-2", .title = "T2", .artist = "ArtistB", .rotation = "rotation", .filename = playable_stub_path(), .length_ms = 30},
+            zautomate::Track{.track_id = "ALB" + std::to_string(show_id) + "-3", .title = "T3", .artist = "ArtistC", .rotation = "rotation", .filename = playable_stub_path(), .length_ms = 30},
         };
     }
 
     std::unordered_map<int, std::vector<zautomate::Cart>> get_carts() override {
         return {
-            {0, {zautomate::Cart{.cart_id = "c0", .title = "PSA", .issuer = "WSBF", .cart_type = "PSA", .filename = "/bin/ls", .length_ms = 20}}},
-            {1, {zautomate::Cart{.cart_id = "c1", .title = "UW", .issuer = "WSBF", .cart_type = "Underwriting", .filename = "/bin/ls", .length_ms = 20}}},
-            {2, {zautomate::Cart{.cart_id = "c2", .title = "ID", .issuer = "WSBF", .cart_type = "StationID", .filename = "/bin/ls", .length_ms = 20}}},
-            {3, {zautomate::Cart{.cart_id = "c3", .title = "Promo", .issuer = "WSBF", .cart_type = "Promotion", .filename = "/bin/ls", .length_ms = 20}}},
+            {0, {zautomate::Cart{.cart_id = "c0", .title = "PSA", .issuer = "WSBF", .cart_type = "PSA", .filename = playable_stub_path(), .length_ms = 20}}},
+            {1, {zautomate::Cart{.cart_id = "c1", .title = "UW", .issuer = "WSBF", .cart_type = "Underwriting", .filename = playable_stub_path(), .length_ms = 20}}},
+            {2, {zautomate::Cart{.cart_id = "c2", .title = "ID", .issuer = "WSBF", .cart_type = "StationID", .filename = playable_stub_path(), .length_ms = 20}}},
+            {3, {zautomate::Cart{.cart_id = "c3", .title = "Promo", .issuer = "WSBF", .cart_type = "Promotion", .filename = playable_stub_path(), .length_ms = 20}}},
         };
     }
 
     zautomate::LibrarySearchResult search_library(const std::string& query) override {
         zautomate::LibrarySearchResult result;
-        result.carts.push_back(zautomate::Cart{.cart_id = "s-2", .title = "Cart " + query, .issuer = "WSBF", .cart_type = "PSA", .filename = "/bin/ls", .length_ms = 20});
-        result.tracks.push_back(zautomate::Track{.track_id = "s-1", .title = "Result " + query, .artist = "ArtistX", .rotation = "rotation", .filename = "/bin/ls", .length_ms = 30});
+        result.carts.push_back(zautomate::Cart{.cart_id = "s-2", .title = "Cart " + query, .issuer = "WSBF", .cart_type = "PSA", .filename = playable_stub_path(), .length_ms = 20});
+        result.tracks.push_back(zautomate::Track{.track_id = "s-1", .title = "Result " + query, .artist = "ArtistX", .rotation = "rotation", .filename = playable_stub_path(), .length_ms = 30});
         return result;
     }
 
