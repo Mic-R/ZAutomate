@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ZAutomateCpp VERSION 2.1.15 LANGUAGES CXX)
+project(ZAutomateCpp VERSION 2.1.16 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -108,19 +108,15 @@ if(Qt6_FOUND)
             "${QT_LIBS_SOURCE_DIR}/libQt6*.so*"
         )
 
-        set_target_properties(zautomate PROPERTIES
-            INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
-        )
-
         configure_file(
-            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/qt.conf.in
-            ${CMAKE_CURRENT_BINARY_DIR}/qt.conf
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/zautomate-wrapper.sh.in
+            ${CMAKE_CURRENT_BINARY_DIR}/zautomate
             @ONLY
         )
 
         install(TARGETS zautomate
             RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/zautomate
         )
         install(RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
             DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -130,11 +126,12 @@ if(Qt6_FOUND)
         install(FILES ${QT_SHARED_LIBS}
             DESTINATION ${CMAKE_INSTALL_LIBDIR}
         )
-        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qt.conf
-            DESTINATION ${CMAKE_INSTALL_BINDIR}
-        )
         install(DIRECTORY "${QT_PLUGINS_SOURCE_DIR}/platforms"
             DESTINATION "${CMAKE_INSTALL_LIBDIR}/qt6/plugins"
+        )
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/zautomate
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
         )
     endif()
 else()
