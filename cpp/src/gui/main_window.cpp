@@ -10,7 +10,10 @@
 
 #include <QDateTime>
 #include <QApplication>
+#include <QCheckBox>
+#include <QDialogButtonBox>
 #include <QDialog>
+#include <QFormLayout>
 #include <QStyledItemDelegate>
 #include <QEvent>
 #include <QGroupBox>
@@ -40,9 +43,12 @@
 #include <QScrollArea>
 #include <QDesktopServices>
 #include <QComboBox>
+#include <QSettings>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QIcon>
+#include <QSpinBox>
+#include <QTabWidget>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDragMoveEvent>
@@ -51,6 +57,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include "zautomate/database_client.hpp"
 #include "zautomate/logger.hpp"
 #include "zautomate/gui/easter_egg_dialog.hpp"
 
@@ -234,6 +241,131 @@ private:
     }
 };
 
+class SettingsDialog : public QDialog {
+public:
+    explicit SettingsDialog(QWidget* parent = nullptr)
+        : QDialog(parent) {
+        setWindowTitle("Settings");
+        setMinimumSize(680, 460);
+
+        auto* root = new QVBoxLayout(this);
+        tabs_ = new QTabWidget(this);
+
+        root->addWidget(tabs_);
+        root->addWidget(create_button_box());
+
+        build_general_tab();
+        build_playback_tab();
+        load_from_settings();
+    }
+
+    QString base_search_url() const {
+        return base_search_url_edit_->text().trimmed();
+    }
+
+    QString library_prefix() const {
+        return library_prefix_edit_->text().trimmed();
+    }
+
+    QString theme() const {
+        return theme_combo_->currentText();
+    }
+
+    QString audio_output() const {
+        return audio_output_combo_->currentText();
+    }
+
+    int search_result_limit() const {
+        return search_limit_spin_->value();
+    }
+
+    bool verbose_activity_log() const {
+        return verbose_activity_check_->isChecked();
+    }
+
+    bool auto_refresh_carts() const {
+        return auto_refresh_check_->isChecked();
+    }
+
+private:
+    QDialogButtonBox* create_button_box() {
+        auto* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+        connect(box, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(box, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        return box;
+    }
+
+    void build_general_tab() {
+        auto* general = new QWidget(tabs_);
+        auto* layout = new QVBoxLayout(general);
+        auto* form = new QFormLayout();
+
+        base_search_url_edit_ = new QLineEdit(general);
+        base_search_url_edit_->setPlaceholderText("https://wsbf.net");
+        form->addRow("Base search URL", base_search_url_edit_);
+
+        library_prefix_edit_ = new QLineEdit(general);
+        library_prefix_edit_->setPlaceholderText("/users/jermaine");
+        form->addRow("Library path", library_prefix_edit_);
+
+        search_limit_spin_ = new QSpinBox(general);
+        search_limit_spin_->setRange(1, 500);
+        search_limit_spin_->setSuffix(" results");
+        form->addRow("Search result limit", search_limit_spin_);
+
+        layout->addWidget(new QLabel("General application and backend settings.", general));
+        layout->addLayout(form);
+        layout->addStretch(1);
+        tabs_->addTab(general, "General");
+    }
+
+    void build_playback_tab() {
+        auto* playback = new QWidget(tabs_);
+        auto* layout = new QVBoxLayout(playback);
+        auto* form = new QFormLayout();
+
+        audio_output_combo_ = new QComboBox(playback);
+        audio_output_combo_->addItems({"Default system output", "Studio monitor", "Air monitor"});
+        form->addRow("Default audio output", audio_output_combo_);
+
+        theme_combo_ = new QComboBox(playback);
+        theme_combo_->addItems({"Fusion", "System"});
+        form->addRow("Theme", theme_combo_);
+
+        auto_refresh_check_ = new QCheckBox("Refresh cart cache on startup", playback);
+        verbose_activity_check_ = new QCheckBox("Write verbose activity log entries", playback);
+
+        layout->addWidget(new QLabel("Playback and visual preferences.", playback));
+        layout->addLayout(form);
+        layout->addWidget(auto_refresh_check_);
+        layout->addWidget(verbose_activity_check_);
+        layout->addStretch(1);
+        tabs_->addTab(playback, "Playback");
+    }
+
+    /* Advanced tab removed: no content to display */
+
+    void load_from_settings() {
+        QSettings settings;
+        base_search_url_edit_->setText(settings.value("network/baseSearchUrl", "https://wsbf.net").toString());
+        library_prefix_edit_->setText(settings.value("storage/libraryPrefix", "/users/jermaine").toString());
+        search_limit_spin_->setValue(settings.value("studio/searchResultLimit", 24).toInt());
+        audio_output_combo_->setCurrentText(settings.value("audio/defaultOutput", "Default system output").toString());
+        theme_combo_->setCurrentText(settings.value("ui/theme", "Fusion").toString());
+        auto_refresh_check_->setChecked(settings.value("cart/autoRefreshOnStart", true).toBool());
+        verbose_activity_check_->setChecked(settings.value("ui/verboseActivityLog", false).toBool());
+    }
+
+    QTabWidget* tabs_{nullptr};
+    QLineEdit* base_search_url_edit_{nullptr};
+    QLineEdit* library_prefix_edit_{nullptr};
+    QSpinBox* search_limit_spin_{nullptr};
+    QComboBox* audio_output_combo_{nullptr};
+    QComboBox* theme_combo_{nullptr};
+    QCheckBox* auto_refresh_check_{nullptr};
+    QCheckBox* verbose_activity_check_{nullptr};
+};
+
 template <typename Work, typename Done>
 void run_background(QObject* receiver, Work work, Done done) {
     class Runnable final : public QRunnable {
@@ -287,6 +419,16 @@ MainWindow::MainWindow(std::unique_ptr<DatabaseProvider> db_client, QWidget* par
     setWindowIcon(QIcon(":/assets/app-icon.svg"));
     setMinimumSize(1100, 760);
     build_ui();
+    {
+        QSettings settings;
+        if (audio_output_combo_) {
+            audio_output_combo_->setCurrentText(settings.value("audio/defaultOutput", "Default system output").toString());
+        }
+        const auto theme_name = settings.value("ui/theme", "Fusion").toString();
+        if (!theme_name.isEmpty()) {
+            qApp->setStyle(theme_name);
+        }
+    }
     apply_theme();
     // Construct cart machine without initial synchronous refresh to avoid blocking GUI startup
     cart_machine_ = std::make_unique<CartMachineModule>(*db_, false);
@@ -354,6 +496,10 @@ void MainWindow::build_ui() {
     search_action_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_K));
     connect(search_action_, &QAction::triggered, this, &MainWindow::run_studio_search);
 
+    settings_action_ = toolsMenu->addAction("Settings");
+    settings_action_->setShortcut(QKeySequence::Preferences);
+    connect(settings_action_, &QAction::triggered, this, &MainWindow::open_settings_dialog);
+
     easter_egg_action_ = toolsMenu->addAction("Shh big secret!");
     easter_egg_action_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B));
     connect(easter_egg_action_, &QAction::triggered, this, &MainWindow::show_easter_egg);
@@ -374,10 +520,12 @@ void MainWindow::build_ui() {
     toolbar->setIconSize(QSize(16, 16));
     toolbar->addAction(refresh_all_action_);
     toolbar->addAction(search_action_);
+    toolbar->addAction(settings_action_);
     toolbar->addAction(easter_egg_action_);
     // Ensure actions are enabled on startup
     if (refresh_all_action_) refresh_all_action_->setEnabled(true);
     if (search_action_) search_action_->setEnabled(true);
+    if (settings_action_) settings_action_->setEnabled(true);
     if (easter_egg_action_) easter_egg_action_->setEnabled(true);
 
     auto* hero = new QFrame(root);
@@ -1027,35 +1175,45 @@ void MainWindow::run_studio_search() {
                        return studio_.search_async(query).get();
                    },
                    [this](const LibrarySearchResult& result) {
+                       QSettings settings;
+                       const int search_limit = std::max(1, settings.value("studio/searchResultLimit", 24).toInt());
+                       int rendered = 0;
+
                        studio_results_->clear();
                        for (const auto& cart : result.carts) {
-                                       auto* item = new QListWidgetItem("[Cart] " + format_item_line(cart) + QString(" [%1]").arg(format_duration(cart.length_ms)), studio_results_);
+                           if (rendered >= search_limit) {
+                               break;
+                           }
+                           auto* item = new QListWidgetItem("[Cart] " + format_item_line(cart) + QString(" [%1]").arg(format_duration(cart.length_ms)), studio_results_);
                             item->setData(KindRole, "cart");
                             item->setData(IdRole, QString::fromStdString(cart.cart_id));
                             item->setData(IssuerRole, QString::fromStdString(cart.issuer));
                             item->setData(TitleRole, QString::fromStdString(cart.title));
                             item->setData(FileRole, QString::fromStdString(cart.filename));
                             item->setData(TypeRole, QString::fromStdString(cart.cart_type));
-                                       item->setData(DurationRole, format_duration(cart.length_ms));
-                                       item->setForeground(QBrush(QColor("#1a8a2f")));
+                           item->setData(DurationRole, format_duration(cart.length_ms));
+                           item->setForeground(QBrush(QColor("#1a8a2f")));
+                           ++rendered;
                        }
                        for (const auto& track : result.tracks) {
-                                       auto* item = new QListWidgetItem(QString("[Track] %1 - %2 [%3]").arg(QString::fromStdString(track.artist), QString::fromStdString(track.title), format_duration(track.length_ms)), studio_results_);
+                           if (rendered >= search_limit) {
+                               break;
+                           }
+                           auto* item = new QListWidgetItem(QString("[Track] %1 - %2 [%3]").arg(QString::fromStdString(track.artist), QString::fromStdString(track.title), format_duration(track.length_ms)), studio_results_);
                             item->setData(KindRole, "track");
                             item->setData(IdRole, QString::fromStdString(track.track_id));
                             item->setData(IssuerRole, QString::fromStdString(track.artist));
                             item->setData(TitleRole, QString::fromStdString(track.title));
                             item->setData(FileRole, QString::fromStdString(track.filename));
                             item->setData(TypeRole, QString::fromStdString(track.rotation));
-                                       item->setData(DurationRole, format_duration(track.length_ms));
-                                       item->setForeground(QBrush(QColor("#1a8a2f")));
+                           item->setData(DurationRole, format_duration(track.length_ms));
+                           item->setForeground(QBrush(QColor("#1a8a2f")));
+                           ++rendered;
                        }
                        if (studio_results_->count() == 0) {
                            studio_results_->addItem("No results found.");
                        }
-                       append_activity(QString("Studio search returned %1 cart(s) and %2 track(s).")
-                                           .arg(static_cast<int>(result.carts.size()))
-                                           .arg(static_cast<int>(result.tracks.size())));
+                       append_activity(QString("Studio search returned %1 cart(s) and %2 track(s); showing %3 item(s).").arg(static_cast<int>(result.carts.size())).arg(static_cast<int>(result.tracks.size())).arg(rendered));
                        statusBar()->showMessage(QString("Search complete: %1 carts, %2 tracks").arg(static_cast<int>(result.carts.size())).arg(static_cast<int>(result.tracks.size())), 3000);
                        set_busy(false);
                    });
@@ -1065,6 +1223,50 @@ void MainWindow::show_easter_egg() {
     append_activity("Hidden card opened.");
     EasterEggDialog dialog(this);
     dialog.exec();
+}
+
+void MainWindow::open_settings_dialog() {
+    SettingsDialog dialog(studio_window_ ? studio_window_ : this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    QSettings settings;
+    settings.setValue("network/baseSearchUrl", dialog.base_search_url());
+    settings.setValue("storage/libraryPrefix", dialog.library_prefix());
+    settings.setValue("studio/searchResultLimit", dialog.search_result_limit());
+    settings.setValue("audio/defaultOutput", dialog.audio_output());
+    settings.setValue("ui/theme", dialog.theme());
+    settings.setValue("cart/autoRefreshOnStart", dialog.auto_refresh_carts());
+    settings.setValue("ui/verboseActivityLog", dialog.verbose_activity_log());
+
+    if (auto* client = dynamic_cast<DatabaseClient*>(db_.get())) {
+        client->set_api_base_url(dialog.base_search_url().toStdString());
+        client->set_library_prefix(dialog.library_prefix().toStdString());
+    }
+
+    if (audio_output_combo_) {
+        audio_output_combo_->setCurrentText(dialog.audio_output());
+    }
+    if (audio_output_status_) {
+        audio_output_status_->setText(QString("Selected output: %1").arg(dialog.audio_output()));
+    }
+
+    const auto theme_name = dialog.theme();
+    if (!theme_name.isEmpty()) {
+        qApp->setStyle(theme_name);
+        apply_theme();
+    }
+
+    refresh_carts_view_async();
+    refresh_automation_view();
+
+    if (dialog.verbose_activity_log()) {
+        append_activity("Verbose activity logging enabled.");
+    }
+
+    append_activity(QString("Settings saved: base URL %1, library path %2.").arg(dialog.base_search_url(), dialog.library_prefix()));
+    statusBar()->showMessage("Settings saved", 2500);
 }
 
 void MainWindow::set_busy(bool busy, const QString& message) {

@@ -20,13 +20,25 @@ namespace zautomate {
 
 namespace {
 
-constexpr const char* URL_CARTLOAD = "https://wsbf.net/api/zautomate/cartmachine_load.php";
-constexpr const char* URL_AUTOLOAD = "https://wsbf.net/api/zautomate/automation_generate_showplist.php";
-constexpr const char* URL_AUTOSTART = "https://wsbf.net/api/zautomate/automation_generate_showid.php";
-constexpr const char* URL_AUTOCART = "https://wsbf.net/api/zautomate/automation_add_carts.php";
-constexpr const char* URL_STUDIOSEARCH = "https://wsbf.net/api/zautomate/studio_search.php";
-constexpr const char* URL_LOG_CART = "https://wsbf.net/api/zautomate/log_cart.php";
-constexpr const char* URL_LOG_TRACK = "https://wsbf.net/api/zautomate/log_track.php";
+constexpr const char* kApiPath = "/api/zautomate/";
+constexpr const char* URL_CARTLOAD = "cartmachine_load.php";
+constexpr const char* URL_AUTOLOAD = "automation_generate_showplist.php";
+constexpr const char* URL_AUTOSTART = "automation_generate_showid.php";
+constexpr const char* URL_AUTOCART = "automation_add_carts.php";
+constexpr const char* URL_STUDIOSEARCH = "studio_search.php";
+constexpr const char* URL_LOG_CART = "log_cart.php";
+constexpr const char* URL_LOG_TRACK = "log_track.php";
+
+std::string normalize_base_url(std::string base_url) {
+    while (!base_url.empty() && base_url.back() == '/') {
+        base_url.pop_back();
+    }
+    return base_url;
+}
+
+std::string api_url(const std::string& base_url, const char* suffix) {
+    return normalize_base_url(base_url) + kApiPath + suffix;
+}
 
 std::size_t write_callback(void* data, std::size_t size, std::size_t nmemb, void* userp) {
     const std::size_t len = size * nmemb;
@@ -200,9 +212,25 @@ static bool safe_parse_json(const std::string& body, nlohmann::json& out) {
 
 }  // namespace
 
-DatabaseClient::DatabaseClient(std::string library_prefix)
-    : library_prefix_(std::move(library_prefix)) {
+DatabaseClient::DatabaseClient(std::string library_prefix, std::string api_base_url)
+    : library_prefix_(std::move(library_prefix)), api_base_url_(normalize_base_url(std::move(api_base_url))) {
     curl_global_init(CURL_GLOBAL_DEFAULT);
+}
+
+void DatabaseClient::set_library_prefix(std::string library_prefix) {
+    library_prefix_ = std::move(library_prefix);
+}
+
+void DatabaseClient::set_api_base_url(std::string api_base_url) {
+    api_base_url_ = normalize_base_url(std::move(api_base_url));
+}
+
+const std::string& DatabaseClient::library_prefix() const {
+    return library_prefix_;
+}
+
+const std::string& DatabaseClient::api_base_url() const {
+    return api_base_url_;
 }
 
 std::string DatabaseClient::http_get(const std::string& url, const std::vector<std::pair<std::string, std::string>>& query_params) const {
@@ -293,7 +321,7 @@ std::string DatabaseClient::cart_type_to_index(const std::string& cart_type) {
 }
 
 int DatabaseClient::get_new_show_id(int previous_show_id) {
-    const auto body = http_get(URL_AUTOSTART, {{"showid", std::to_string(previous_show_id)}});
+    const auto body = http_get(api_url(api_base_url_, URL_AUTOSTART), {{"showid", std::to_string(previous_show_id)}});
     if (body.empty()) {
         Logger::log(LogLevel::kWarn, "DBClient", "Empty response for new show id");
         return -1;
@@ -318,7 +346,7 @@ int DatabaseClient::get_new_show_id(int previous_show_id) {
 
 std::optional<Cart> DatabaseClient::get_cart(const std::string& cart_type) {
     for (int i = 0; i < 5; ++i) {
-        const auto body = http_get(URL_AUTOCART, {{"type", cart_type_to_index(cart_type)}});
+        const auto body = http_get(api_url(api_base_url_, URL_AUTOCART), {{"type", cart_type_to_index(cart_type)}});
         if (body.empty()) {
             continue;
         }
@@ -351,7 +379,7 @@ std::optional<Cart> DatabaseClient::get_cart(const std::string& cart_type) {
 
 std::vector<Track> DatabaseClient::get_playlist(int show_id) {
     std::vector<Track> playlist;
-    const auto body = http_get(URL_AUTOLOAD, {{"showid", std::to_string(show_id)}});
+    const auto body = http_get(api_url(api_base_url_, URL_AUTOLOAD), {{"showid", std::to_string(show_id)}});
     if (body.empty()) {
         Logger::log(LogLevel::kWarn, "DBClient", "Empty playlist response");
         return playlist;
@@ -387,7 +415,7 @@ std::unordered_map<int, std::vector<Cart>> DatabaseClient::get_carts() {
     std::unordered_map<int, std::vector<Cart>> carts = {{0, {}}, {1, {}}, {2, {}}, {3, {}}};
 
     for (int cart_type = 0; cart_type <= 3; ++cart_type) {
-        const auto body = http_get(URL_CARTLOAD, {{"type", std::to_string(cart_type)}});
+        const auto body = http_get(api_url(api_base_url_, URL_CARTLOAD), {{"type", std::to_string(cart_type)}});
         if (body.empty()) {
             Logger::log(LogLevel::kWarn, "DBClient", "Empty cart load response");
             continue;
@@ -423,7 +451,7 @@ std::unordered_map<int, std::vector<Cart>> DatabaseClient::get_carts() {
 LibrarySearchResult DatabaseClient::search_library(const std::string& query) {
     LibrarySearchResult out;
 
-    const auto body = http_get(URL_STUDIOSEARCH, {{"query", query}});
+    const auto body = http_get(api_url(api_base_url_, URL_STUDIOSEARCH), {{"query", query}});
     if (body.empty()) {
         Logger::log(LogLevel::kWarn, "DBClient", "Empty studio search response");
         return out;
@@ -470,11 +498,11 @@ LibrarySearchResult DatabaseClient::search_library(const std::string& query) {
 }
 
 void DatabaseClient::log_cart(const std::string& cart_id) {
-    (void)http_post(URL_LOG_CART, {{"cartid", cart_id}});
+    (void)http_post(api_url(api_base_url_, URL_LOG_CART), {{"cartid", cart_id}});
 }
 
 void DatabaseClient::log_track(const std::string& album_id, const std::string& track_num, int disc_num) {
-    (void)http_post(URL_LOG_TRACK,
+    (void)http_post(api_url(api_base_url_, URL_LOG_TRACK),
                     {{"albumID", album_id}, {"disc_num", std::to_string(disc_num)}, {"track_num", track_num}});
 }
 

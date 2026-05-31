@@ -10,7 +10,13 @@ namespace zautomate {
 
 class DatabaseClient final : public DatabaseProvider {
 public:
-    explicit DatabaseClient(std::string library_prefix = "/media/Jemaine/");
+    explicit DatabaseClient(std::string library_prefix = "/media/Jemaine/", std::string api_base_url = "https://wsbf.net");
+
+    void set_library_prefix(std::string library_prefix);
+    void set_api_base_url(std::string api_base_url);
+
+    [[nodiscard]] const std::string& library_prefix() const;
+    [[nodiscard]] const std::string& api_base_url() const;
 
     int get_new_show_id(int previous_show_id) override;
     std::optional<Cart> get_cart(const std::string& cart_type) override;
@@ -26,6 +32,7 @@ private:
     static std::string cart_type_to_index(const std::string& cart_type);
 
     std::string library_prefix_;
+    std::string api_base_url_;
 };
 
 }  // namespace zautomate

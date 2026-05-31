@@ -15,6 +15,9 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QDialog;
+class QCheckBox;
+class QDialogButtonBox;
+class QFormLayout;
 class QPlainTextEdit;
 class QPushButton;
 class QTreeWidget;
@@ -27,6 +30,7 @@ class QGridLayout;
 class QScrollArea;
 class QTimer;
 class QComboBox;
+class QTabWidget;
 
 namespace zautomate {
 
@@ -45,6 +49,7 @@ private:
     void refresh_carts_view();
     void refresh_carts_view_async();
     void run_studio_search();
+    void open_settings_dialog();
     void show_easter_egg();
     void set_busy(bool busy, const QString& message = QString());
     void append_activity(const QString& message);
@@ -85,6 +90,7 @@ private:
     QLabel* audio_output_status_{nullptr};
     QAction* refresh_all_action_{nullptr};
     QAction* search_action_{nullptr};
+    QAction* settings_action_{nullptr};
     QAction* easter_egg_action_{nullptr};
     QPushButton* studio_search_button_{nullptr};
     QPushButton* cart_refresh_button_{nullptr};
