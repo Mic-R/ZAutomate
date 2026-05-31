@@ -89,6 +89,15 @@ if(Qt6_FOUND)
         # Use forward-slashes to avoid CMake escape-sequence issues (CMP0010)
         set(CPACK_NSIS_INSTALLED_ICON_NAME "bin/zautomate.exe")
     endif()
+
+    if(UNIX AND NOT APPLE)
+        qt_generate_deploy_app_script(
+            TARGET zautomate
+            OUTPUT_SCRIPT qt_deploy_script
+            NO_UNSUPPORTED_PLATFORM_ERROR
+        )
+        install(SCRIPT ${qt_deploy_script})
+    endif()
 else()
     message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
     add_executable(zautomate src/cli_main.cpp)
