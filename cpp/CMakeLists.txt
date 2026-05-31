@@ -127,10 +127,6 @@ if(Qt6_FOUND)
         install(RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
             DESTINATION ${CMAKE_INSTALL_LIBDIR}
             PRE_EXCLUDE_REGEXES
-                "^/lib/.*"
-                "^/usr/lib/.*"
-                "^/lib64/.*"
-                "^/usr/lib64/.*"
                 ".*libc\\.so.*"
                 ".*ld-.*\\.so.*"
             DIRECTORIES
@@ -158,10 +154,6 @@ if(Qt6_FOUND)
                     RESOLVED_DEPENDENCIES_VAR QT_PLUGIN_DEPS
                     UNRESOLVED_DEPENDENCIES_VAR QT_PLUGIN_UNRESOLVED
                     PRE_EXCLUDE_REGEXES
-                        \"^/lib/.*\"
-                        \"^/usr/lib/.*\"
-                        \"^/lib64/.*\"
-                        \"^/usr/lib64/.*\"
                         \".*libc\\.so.*\"
                         \".*ld-.*\\.so.*\"
                 )
