@@ -9,6 +9,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+include(GNUInstallDirs)
+
 include(FetchContent)
 find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
@@ -91,17 +93,41 @@ if(Qt6_FOUND)
     endif()
 
     if(UNIX AND NOT APPLE)
-        qt_generate_deploy_script(
-            TARGET zautomate
-            OUTPUT_SCRIPT qt_deploy_script
-            CONTENT "
-qt_deploy_runtime_dependencies(
-    EXECUTABLE \"${QT_DEPLOY_BIN_DIR}/$<TARGET_FILE_NAME:zautomate>\"
-    GENERATE_QT_CONF
-)
-"
+        find_program(QT_QMAKE_EXECUTABLE NAMES qmake6 qmake REQUIRED)
+        execute_process(
+            COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
+            OUTPUT_VARIABLE QT_PLUGINS_SOURCE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
         )
-        install(SCRIPT ${qt_deploy_script})
+
+        set_target_properties(zautomate PROPERTIES
+            INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+        )
+
+        configure_file(
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/qt.conf.in
+            ${CMAKE_CURRENT_BINARY_DIR}/qt.conf
+            @ONLY
+        )
+
+        install(TARGETS zautomate
+            RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+        install(RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            PRE_EXCLUDE_REGEXES
+                "^/lib/.*"
+                "^/usr/lib/.*"
+                "^/lib64/.*"
+                "^/usr/lib64/.*"
+        )
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qt.conf
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+        install(DIRECTORY "${QT_PLUGINS_SOURCE_DIR}/platforms"
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/qt6/plugins"
+        )
     endif()
 else()
     message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
@@ -122,10 +148,12 @@ include(CTest)
 enable_testing()
 add_test(NAME zautomate_tests COMMAND zautomate_tests)
 
-install(TARGETS zautomate
-    BUNDLE DESTINATION .
-    RUNTIME DESTINATION bin
-)
+if(NOT (UNIX AND NOT APPLE))
+    install(TARGETS zautomate
+        BUNDLE DESTINATION .
+        RUNTIME DESTINATION bin
+    )
+endif()
 
 set(CPACK_PACKAGE_NAME "zautomate")
 set(CPACK_PACKAGE_VENDOR "Michael Reimchen")
