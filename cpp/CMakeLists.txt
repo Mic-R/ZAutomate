@@ -131,6 +131,8 @@ if(Qt6_FOUND)
                 "^/usr/lib/.*"
                 "^/lib64/.*"
                 "^/usr/lib64/.*"
+                ".*libc\\.so.*"
+                ".*ld-.*\\.so.*"
             DIRECTORIES
                 "${QT_LIBS_SOURCE_DIR}"
         )
@@ -144,6 +146,20 @@ if(Qt6_FOUND)
             DESTINATION ${CMAKE_INSTALL_BINDIR}
             RENAME zautomate
         )
+        # Defensive cleanup: ensure forbidden system libs are not present in
+        # the packaging staging area (CPack/DESTDIR). This runs at install
+        # time and removes any stray libc/ld loader files that made it into
+        # the install tree despite the exclusion rules.
+        install(CODE "
+            message(STATUS \"Packaging: removing forbidden system libs from staging area\")
+            file(GLOB FORBIDDEN_LIBS \"${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libc.so*\" \"${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/ld-*.so*\")
+            foreach(f IN LISTS FORBIDDEN_LIBS)
+                if(EXISTS \"${f}\")
+                    file(REMOVE \"${f}\")
+                    message(STATUS \"Removed forbidden file: ${f}\")
+                endif()
+            endforeach()
+        ")
     endif()
 else()
     message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
