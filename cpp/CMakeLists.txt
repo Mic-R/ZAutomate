@@ -139,8 +139,12 @@ if(Qt6_FOUND)
         install(FILES ${QT_SHARED_LIBS}
             DESTINATION ${CMAKE_INSTALL_LIBDIR}
         )
-        install(DIRECTORY "${QT_PLUGINS_SOURCE_DIR}/platforms"
+        install(DIRECTORY "${QT_PLUGINS_SOURCE_DIR}/"
             DESTINATION "${CMAKE_INSTALL_LIBDIR}/qt6/plugins"
+            FILES_MATCHING
+                PATTERN "*.so"
+                PATTERN "*.so.*"
+                PATTERN "*.json"
         )
         install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/zautomate-wrapper
             DESTINATION ${CMAKE_INSTALL_BINDIR}

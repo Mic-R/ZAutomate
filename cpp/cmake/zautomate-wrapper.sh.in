@@ -26,4 +26,12 @@ export LD_LIBRARY_PATH="$SYMLINK_DIR:$BUNDLE_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBR
 export QT_PLUGIN_PATH="$BUNDLE_LIB_DIR/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
 export QT_QPA_PLATFORM_PLUGIN_PATH="$BUNDLE_LIB_DIR/qt6/plugins/platforms"
 
+if [ -z "${QT_QPA_PLATFORM:-}" ]; then
+	if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -d "$BUNDLE_LIB_DIR/qt6/plugins/wayland-shell-integration" ]; then
+		export QT_QPA_PLATFORM=wayland
+	else
+		export QT_QPA_PLATFORM=xcb
+	fi
+fi
+
 exec "$BUNDLE_BIN_DIR/zautomate" "$@"
