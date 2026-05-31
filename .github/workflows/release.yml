@@ -267,6 +267,7 @@ jobs:
           files: |
             dist/**/*.deb
             dist/**/*.tgz
+            dist/**/*.tar.gz
             dist/**/*.zip
             dist/**/*.exe
             dist/**/*.dmg
