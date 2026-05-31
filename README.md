@@ -15,7 +15,7 @@ This repository now includes a modern C++ implementation under `cpp/` with:
 - Real WSBF API integration (HTTP calls to production endpoints)
 - Minimalist Qt desktop interface with project branding
 - Unit/integration-style tests runnable with CTest
-- GitHub Actions CI for Linux and Windows
+- GitHub Actions CI for Linux, macOS, and Windows
 - Automated release workflow with package assets per version
 
 The integrated application header includes:
@@ -23,6 +23,12 @@ The integrated application header includes:
 - Copyright Michael Reimchen
 
 ### Build (C++)
+
+On Ubuntu, install the Qt6 and toolchain packages first:
+
+```bash
+sudo apt-get install cmake ninja-build g++ libcurl4-openssl-dev qt6-base-dev
+```
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
