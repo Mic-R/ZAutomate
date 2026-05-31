@@ -146,6 +146,38 @@ if(Qt6_FOUND)
                 PATTERN "*.so.*"
                 PATTERN "*.json"
         )
+        install(CODE "
+            message(STATUS \"Packaging: collecting Qt plugin runtime dependencies\")
+            file(GLOB_RECURSE QT_PLUGIN_LIBS
+                \"${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/qt6/plugins/*.so\"
+                \"${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/qt6/plugins/*.so.*\"
+            )
+            if(QT_PLUGIN_LIBS)
+                file(GET_RUNTIME_DEPENDENCIES
+                    LIBRARIES \${QT_PLUGIN_LIBS}
+                    RESOLVED_DEPENDENCIES_VAR QT_PLUGIN_DEPS
+                    UNRESOLVED_DEPENDENCIES_VAR QT_PLUGIN_UNRESOLVED
+                    PRE_EXCLUDE_REGEXES
+                        \"^/lib/.*\"
+                        \"^/usr/lib/.*\"
+                        \"^/lib64/.*\"
+                        \"^/usr/lib64/.*\"
+                        \".*libc\\.so.*\"
+                        \".*ld-.*\\.so.*\"
+                )
+                foreach(dep IN LISTS QT_PLUGIN_DEPS)
+                    get_filename_component(dep_name \${dep} NAME)
+                    set(dep_dest \"${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/\${dep_name}\")
+                    if(NOT EXISTS \${dep_dest})
+                        file(INSTALL DESTINATION \"${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}\" TYPE SHARED_LIBRARY FILES \${dep})
+                        message(STATUS \"Installed plugin dependency: \${dep_name}\")
+                    endif()
+                endforeach()
+                if(QT_PLUGIN_UNRESOLVED)
+                    message(WARNING \"Unresolved Qt plugin dependencies: \${QT_PLUGIN_UNRESOLVED}\")
+                endif()
+            endif()
+        ")
         install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/zautomate-wrapper
             DESTINATION ${CMAKE_INSTALL_BINDIR}
             RENAME zautomate
