@@ -96,6 +96,36 @@ jobs:
         if: runner.os == 'Linux'
         run: cpack --config cpp/build/CPackConfig.cmake -B cpp/build/packages
 
+      - name: Smoke test Linux tarball
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARBALL=$(find cpp/build/packages -maxdepth 1 -type f \( -name '*.tgz' -o -name '*.tar.gz' \) -print -quit)
+          if [ -z "$TARBALL" ]; then
+            echo "No Linux tarball found under cpp/build/packages" >&2
+            exit 1
+          fi
+
+          WORK_DIR=$(mktemp -d)
+          trap 'rm -rf "$WORK_DIR"' EXIT
+          tar -xf "$TARBALL" -C "$WORK_DIR"
+
+          APP_BIN=$(find "$WORK_DIR" -path '*/bin/zautomate' -type f -perm -111 -print -quit)
+          if [ -z "$APP_BIN" ]; then
+            echo "No executable bin/zautomate found inside $TARBALL" >&2
+            find "$WORK_DIR" -maxdepth 3 -type f | sort >&2
+            exit 1
+          fi
+
+          echo "Smoke testing $APP_BIN"
+          rc=0
+          timeout 15s env QT_QPA_PLATFORM=offscreen "$APP_BIN" >/tmp/zautomate-smoke.log 2>&1 || rc=$?
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+            cat /tmp/zautomate-smoke.log >&2
+            exit "$rc"
+          fi
+
       - name: Bundle Qt libs (macOS)
         if: runner.os == 'macOS'
         run: |
