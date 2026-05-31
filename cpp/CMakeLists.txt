@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ZAutomateCpp VERSION 2.1.6 LANGUAGES CXX)
+project(ZAutomateCpp VERSION 2.1.14 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -99,6 +99,11 @@ if(Qt6_FOUND)
             OUTPUT_VARIABLE QT_PLUGINS_SOURCE_DIR
             OUTPUT_STRIP_TRAILING_WHITESPACE
         )
+        execute_process(
+            COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_LIBS
+            OUTPUT_VARIABLE QT_LIBS_SOURCE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
 
         set_target_properties(zautomate PROPERTIES
             INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
@@ -116,11 +121,8 @@ if(Qt6_FOUND)
         )
         install(RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
             DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            PRE_EXCLUDE_REGEXES
-                "^/lib/.*"
-                "^/usr/lib/.*"
-                "^/lib64/.*"
-                "^/usr/lib64/.*"
+            DIRECTORIES
+                "${QT_LIBS_SOURCE_DIR}"
         )
         install(FILES ${CMAKE_CURRENT_BINARY_DIR}/qt.conf
             DESTINATION ${CMAKE_INSTALL_BINDIR}
