@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ZAutomateCpp VERSION 2.1.16 LANGUAGES CXX)
+project(ZAutomateCpp VERSION 2.1.19 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
