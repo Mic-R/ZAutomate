@@ -2,8 +2,28 @@
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-export LD_LIBRARY_PATH="$SCRIPT_DIR/../@CMAKE_INSTALL_LIBDIR@${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export QT_PLUGIN_PATH="$SCRIPT_DIR/../@CMAKE_INSTALL_LIBDIR@/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
-export QT_QPA_PLATFORM_PLUGIN_PATH="$SCRIPT_DIR/../@CMAKE_INSTALL_LIBDIR@/qt6/plugins/platforms"
+BUNDLE_LIB_DIR="$SCRIPT_DIR/../@CMAKE_INSTALL_LIBDIR@"
+BUNDLE_BIN_DIR="$SCRIPT_DIR/../@CMAKE_INSTALL_LIBEXECDIR@/zautomate"
+SYMLINK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/zautomate-qt-XXXXXX")
 
-exec "$SCRIPT_DIR/../@CMAKE_INSTALL_LIBEXECDIR@/zautomate/zautomate" "$@"
+cleanup() {
+	rm -rf "$SYMLINK_DIR"
+}
+
+trap cleanup EXIT HUP INT TERM
+
+for lib in "$BUNDLE_LIB_DIR"/lib*.so.*.*; do
+	[ -e "$lib" ] || continue
+	base=$(basename -- "$lib")
+	soname=$(printf '%s\n' "$base" | sed -E 's/^(.+\.so\.[0-9]+)\..*$/\1/')
+	[ "$soname" != "$base" ] || continue
+	if [ ! -e "$SYMLINK_DIR/$soname" ]; then
+		ln -s "$lib" "$SYMLINK_DIR/$soname"
+	fi
+done
+
+export LD_LIBRARY_PATH="$SYMLINK_DIR:$BUNDLE_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export QT_PLUGIN_PATH="$BUNDLE_LIB_DIR/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+export QT_QPA_PLATFORM_PLUGIN_PATH="$BUNDLE_LIB_DIR/qt6/plugins/platforms"
+
+exec "$BUNDLE_BIN_DIR/zautomate" "$@"
