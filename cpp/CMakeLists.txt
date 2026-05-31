@@ -91,10 +91,15 @@ if(Qt6_FOUND)
     endif()
 
     if(UNIX AND NOT APPLE)
-        qt_generate_deploy_app_script(
+        qt_generate_deploy_script(
             TARGET zautomate
             OUTPUT_SCRIPT qt_deploy_script
-            NO_UNSUPPORTED_PLATFORM_ERROR
+            CONTENT "
+qt_deploy_runtime_dependencies(
+    EXECUTABLE \"${QT_DEPLOY_BIN_DIR}/$<TARGET_FILE_NAME:zautomate>\"
+    GENERATE_QT_CONF
+)
+"
         )
         install(SCRIPT ${qt_deploy_script})
     endif()
