@@ -116,7 +116,7 @@ if(Qt6_FOUND)
 
         install(TARGETS zautomate
             RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
-            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/zautomate
+            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/zautomate-bin
         )
         install(RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
             DESTINATION ${CMAKE_INSTALL_LIBDIR}

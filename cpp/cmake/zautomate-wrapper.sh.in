@@ -3,7 +3,7 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 BUNDLE_LIB_DIR="$SCRIPT_DIR/../@CMAKE_INSTALL_LIBDIR@"
-BUNDLE_BIN_DIR="$SCRIPT_DIR/../@CMAKE_INSTALL_LIBEXECDIR@/zautomate"
+BUNDLE_BIN_DIR="$SCRIPT_DIR/../@CMAKE_INSTALL_LIBDIR@/zautomate-bin"
 SYMLINK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/zautomate-qt-XXXXXX")
 
 cleanup() {
