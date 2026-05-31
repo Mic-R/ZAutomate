@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ZAutomateCpp VERSION 2.1.20 LANGUAGES CXX)
+project(ZAutomateCpp VERSION 2.1.21 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -93,21 +93,46 @@ if(Qt6_FOUND)
     endif()
 
     if(UNIX AND NOT APPLE)
-        qt_generate_deploy_script(
-            TARGET zautomate
-            OUTPUT_SCRIPT qt_deploy_script
-            CONTENT "
-qt_deploy_runtime_dependencies(
-    EXECUTABLE \"${QT_DEPLOY_BIN_DIR}/$<TARGET_FILE_NAME:zautomate>\"
-    GENERATE_QT_CONF
-)
-"
+        find_program(QT_QMAKE_EXECUTABLE NAMES qmake6 qmake REQUIRED)
+        execute_process(
+            COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_PLUGINS
+            OUTPUT_VARIABLE QT_PLUGINS_SOURCE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
         )
+        execute_process(
+            COMMAND "${QT_QMAKE_EXECUTABLE}" -query QT_INSTALL_LIBS
+            OUTPUT_VARIABLE QT_LIBS_SOURCE_DIR
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        file(GLOB QT_SHARED_LIBS
+            "${QT_LIBS_SOURCE_DIR}/libQt6*.so*"
+        )
+
+        configure_file(
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/zautomate-wrapper.sh.in
+            ${CMAKE_CURRENT_BINARY_DIR}/zautomate
+            @ONLY
+        )
+
         install(TARGETS zautomate
             RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_LIBDIR}/zautomate-bin
         )
-        install(SCRIPT ${qt_deploy_script})
+        install(RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            DIRECTORIES
+                "${QT_LIBS_SOURCE_DIR}"
+        )
+        install(FILES ${QT_SHARED_LIBS}
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        )
+        install(DIRECTORY "${QT_PLUGINS_SOURCE_DIR}/platforms"
+            DESTINATION "${CMAKE_INSTALL_LIBDIR}/qt6/plugins"
+        )
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/zautomate
+            DESTINATION ${CMAKE_INSTALL_BINDIR}
+            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+        )
     endif()
 else()
     message(WARNING "Qt6 Widgets not found; building zautomate as the CLI fallback.")
