@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ZAutomateCpp VERSION 2.1.21 LANGUAGES CXX)
+project(ZAutomateCpp VERSION 2.1.22 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -63,6 +63,12 @@ if(Qt6_FOUND)
     target_include_directories(zautomate PRIVATE include)
     target_link_libraries(zautomate PRIVATE zautomate_core zautomate_api Qt6::Widgets)
     target_compile_definitions(zautomate PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
+    if(UNIX AND NOT APPLE)
+        set_target_properties(zautomate PROPERTIES
+            INSTALL_RPATH "$ORIGIN/.."
+            BUILD_RPATH "$ORIGIN/.."
+        )
+    endif()
     if(APPLE)
         set_target_properties(zautomate PROPERTIES MACOSX_BUNDLE TRUE)
     endif()
