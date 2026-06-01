@@ -119,6 +119,11 @@ if(Qt6_FOUND)
             ${CMAKE_CURRENT_BINARY_DIR}/zautomate-wrapper
             @ONLY
         )
+        configure_file(
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/zautomate.desktop.in
+            ${CMAKE_CURRENT_BINARY_DIR}/zautomate.desktop
+            @ONLY
+        )
 
         install(TARGETS zautomate
             RUNTIME_DEPENDENCY_SET zautomate_runtime_deps
@@ -173,6 +178,13 @@ if(Qt6_FOUND)
         install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/zautomate-wrapper
             DESTINATION ${CMAKE_INSTALL_BINDIR}
             RENAME zautomate
+        )
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/zautomate.desktop
+            DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications
+        )
+        install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/app_icon.svg
+            DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps
+            RENAME zautomate.svg
         )
         # Defensive cleanup: ensure forbidden system libs are not present in
         # the packaging staging area (CPack/DESTDIR). This runs at install

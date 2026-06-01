@@ -16,6 +16,7 @@ int main(int argc, char* argv[]) {
         app.setApplicationName("ZAutomate");
         app.setOrganizationName("Michael Reimchen");
         app.setApplicationDisplayName("ZAutomate");
+        app.setDesktopFileName("zautomate");
         app.setStyle("Fusion");
         app.setWindowIcon(QIcon(":/assets/app-icon.svg"));
 

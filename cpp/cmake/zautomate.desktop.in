@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ZAutomate
+Comment=ZAutomate broadcast and cart management
+Exec=zautomate
+Icon=zautomate
+Terminal=false
+Categories=AudioVideo;Utility;
+StartupWMClass=ZAutomate

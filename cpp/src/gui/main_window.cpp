@@ -14,6 +14,7 @@
 #include <QDialogButtonBox>
 #include <QDialog>
 #include <QFormLayout>
+#include <QFrame>
 #include <QStyledItemDelegate>
 #include <QEvent>
 #include <QGroupBox>
@@ -47,6 +48,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QIcon>
+#include <QMouseEvent>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QDrag>
@@ -56,6 +58,7 @@
 #include <QMimeData>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QWindow>
 
 #include "zautomate/database_client.hpp"
 #include "zautomate/logger.hpp"
@@ -77,6 +80,55 @@ enum SearchItemRole {
 };
 
 constexpr char kCartMimeType[] = "application/x-zautomate-cart";
+
+class DragHeader final : public QFrame {
+public:
+    DragHeader(const QString& title, const QString& subtitle, QWidget* parent = nullptr)
+        : QFrame(parent) {
+        setObjectName("dragHeader");
+        setCursor(Qt::SizeAllCursor);
+
+        auto* layout = new QHBoxLayout(this);
+        layout->setContentsMargins(12, 10, 12, 10);
+        layout->setSpacing(12);
+
+        auto* icon = new QLabel(this);
+        icon->setPixmap(QIcon(":/assets/app-icon.svg").pixmap(28, 28));
+        icon->setFixedSize(32, 32);
+        icon->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+        auto* textColumn = new QWidget(this);
+        textColumn->setAttribute(Qt::WA_TransparentForMouseEvents);
+        auto* textLayout = new QVBoxLayout(textColumn);
+        textLayout->setContentsMargins(0, 0, 0, 0);
+        textLayout->setSpacing(0);
+
+        auto* titleLabel = new QLabel(title, textColumn);
+        titleLabel->setObjectName("dragHeaderTitle");
+        auto* subtitleLabel = new QLabel(subtitle, textColumn);
+        subtitleLabel->setObjectName("dragHeaderSubtitle");
+        titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+        subtitleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+        textLayout->addWidget(titleLabel);
+        textLayout->addWidget(subtitleLabel);
+
+        layout->addWidget(icon, 0, Qt::AlignVCenter);
+        layout->addWidget(textColumn, 1);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton) {
+            if (auto* handle = window() ? window()->windowHandle() : nullptr) {
+                handle->startSystemMove();
+                event->accept();
+                return;
+            }
+        }
+        QFrame::mousePressEvent(event);
+    }
+};
 
 QJsonObject cart_to_json(const Cart& cart, const QString& kind) {
     QJsonObject obj;
@@ -792,6 +844,7 @@ void MainWindow::build_ui() {
     auto* studioOuter = new QVBoxLayout(studioRoot);
     studioOuter->setContentsMargins(12, 12, 12, 12);
     studioOuter->setSpacing(10);
+    studioOuter->addWidget(new DragHeader("ZAutomate", "Drag here to move the Studio window.", studioRoot));
     studioOuter->addWidget(hero);
     studioOuter->addWidget(studioGroup, 1);
     // Activity in studio
@@ -811,6 +864,7 @@ void MainWindow::build_ui() {
     auto* cartOuter = new QVBoxLayout(cartRoot);
     cartOuter->setContentsMargins(12, 12, 12, 12);
     cartOuter->setSpacing(10);
+    cartOuter->addWidget(new DragHeader("Cart Machine", "Drag here to move the Cart window.", cartRoot));
     cartOuter->addWidget(cartGroup);
     cart_window_->setCentralWidget(cartRoot);
 
@@ -818,6 +872,7 @@ void MainWindow::build_ui() {
     auto* automationOuter = new QVBoxLayout(automationRoot);
     automationOuter->setContentsMargins(12, 12, 12, 12);
     automationOuter->setSpacing(10);
+    automationOuter->addWidget(new DragHeader("Automation", "Drag here to move the Automation window.", automationRoot));
     automationOuter->addWidget(automationGroup);
     automation_window_->setCentralWidget(automationRoot);
 
@@ -877,6 +932,20 @@ void MainWindow::apply_theme() {
             border: 1px solid #d0d0d0;
             border-radius: 4px;
             padding: 6px;
+        }
+        QFrame#dragHeader {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1c6aa8, stop:1 #155a8c);
+            border: 1px solid #124a73;
+            border-radius: 10px;
+        }
+        QLabel#dragHeaderTitle {
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        QLabel#dragHeaderSubtitle {
+            color: #e8f2fb;
+            font-size: 12px;
         }
         QLabel#heroTitle {
             font-size: 26px;
