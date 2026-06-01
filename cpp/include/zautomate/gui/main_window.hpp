@@ -91,6 +91,7 @@ private:
     QAction* refresh_all_action_{nullptr};
     QAction* search_action_{nullptr};
     QAction* settings_action_{nullptr};
+    QAction* install_action_{nullptr};
     QAction* easter_egg_action_{nullptr};
     QPushButton* studio_search_button_{nullptr};
     QPushButton* cart_refresh_button_{nullptr};

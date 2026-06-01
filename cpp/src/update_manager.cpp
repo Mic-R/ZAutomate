@@ -86,6 +86,26 @@ std::vector<int> parse_semver(const std::string& version) {
     return parts;
 }
 
+std::string platform_package_dir() {
+#if defined(_WIN32)
+    return "packages-Windows";
+#elif defined(__APPLE__)
+    return "packages-macOS";
+#else
+    return "packages-Linux";
+#endif
+}
+
+std::string platform_expected_extension() {
+#if defined(_WIN32)
+    return ".zip";
+#elif defined(__APPLE__)
+    return ".dmg";
+#else
+    return ".deb";
+#endif
+}
+
 }  // namespace
 
 UpdateManager::UpdateManager(std::string cloud_root_url, std::string current_version)
@@ -132,28 +152,56 @@ bool UpdateManager::is_newer_version(const std::string& latest, const std::strin
     return false;
 }
 
+std::string UpdateManager::latest_release_package_url(std::string* latest_version) const {
+    if (cloud_root_url_.empty()) {
+        return {};
+    }
+
+    const auto root_index = http_get(cloud_root_url_ + "/");
+    std::regex release_dir_re(R"(href="(v([0-9]+(?:\.[0-9]+)+))/")");
+
+    std::string latest_dir;
+    std::string release_version;
+    for (std::sregex_iterator it(root_index.begin(), root_index.end(), release_dir_re), end; it != end; ++it) {
+        const std::string dir = (*it)[1].str();
+        const std::string version = normalize_version((*it)[2].str());
+        if (release_version.empty() || is_newer_version(version, release_version)) {
+            release_version = version;
+            latest_dir = dir;
+        }
+    }
+
+    if (latest_dir.empty()) {
+        return {};
+    }
+
+    if (latest_version) {
+        *latest_version = release_version;
+    }
+
+    const std::string package_dir = platform_package_dir();
+    const std::string expected_ext = platform_expected_extension();
+    const auto package_index = http_get(join_url(cloud_root_url_, latest_dir + "/" + package_dir + "/"));
+    std::regex asset_href_re(R"re(href="([^"]+)")re");
+
+    for (std::sregex_iterator it(package_index.begin(), package_index.end(), asset_href_re), end; it != end; ++it) {
+        const std::string href = (*it)[1].str();
+        if (href == "../") {
+            continue;
+        }
+        if (ends_with(href, expected_ext)) {
+            return join_url(cloud_root_url_, latest_dir + "/" + package_dir + "/" + href);
+        }
+    }
+
+    return {};
+}
+
 void UpdateManager::check_and_auto_update() const {
     try {
-        if (cloud_root_url_.empty()) {
-            Logger::log(LogLevel::kWarn, "Updater", "Update check skipped: no cloud release URL configured.");
-            return;
-        }
-
-        const auto root_index = http_get(cloud_root_url_ + "/");
-        std::regex release_dir_re(R"(href="(v([0-9]+(?:\.[0-9]+)+))/")");
-
-        std::string latest_dir;
         std::string latest_version;
-        for (std::sregex_iterator it(root_index.begin(), root_index.end(), release_dir_re), end; it != end; ++it) {
-            const std::string dir = (*it)[1].str();
-            const std::string version = normalize_version((*it)[2].str());
-            if (latest_version.empty() || is_newer_version(version, latest_version)) {
-                latest_version = version;
-                latest_dir = dir;
-            }
-        }
-
-        if (latest_dir.empty()) {
+        const auto download_url = latest_release_package_url(&latest_version);
+        if (download_url.empty()) {
             Logger::log(LogLevel::kWarn, "Updater", "Update check: no release directories found on cloud.");
             return;
         }
@@ -167,38 +215,6 @@ void UpdateManager::check_and_auto_update() const {
         Logger::log(LogLevel::kWarn,
                 "Updater",
                 "Update available: " + latest_version + " (current " + current + ")");
-
-        std::string package_dir;
-#if defined(_WIN32)
-        package_dir = "packages-Windows";
-        const std::string expected_ext = ".zip";
-#elif defined(__APPLE__)
-        package_dir = "packages-macOS";
-        const std::string expected_ext = ".dmg";
-#else
-        package_dir = "packages-Linux";
-        const std::string expected_ext = ".deb";
-#endif
-
-        const auto package_index = http_get(join_url(cloud_root_url_, latest_dir + "/" + package_dir + "/"));
-        std::regex asset_href_re(R"(href="([^"]+)")");
-
-        std::string download_url;
-        for (std::sregex_iterator it(package_index.begin(), package_index.end(), asset_href_re), end; it != end; ++it) {
-            const std::string href = (*it)[1].str();
-            if (href == "../") {
-                continue;
-            }
-            if (ends_with(href, expected_ext)) {
-                download_url = join_url(cloud_root_url_, latest_dir + "/" + package_dir + "/" + href);
-                break;
-            }
-        }
-
-        if (download_url.empty()) {
-            Logger::log(LogLevel::kWarn, "Updater", "Update installer not found for this platform in cloud releases.");
-            return;
-        }
 
         const auto payload = http_get(download_url, 300L);
         const auto temp_dir = std::filesystem::temp_directory_path() / "zautomate-update";
@@ -239,6 +255,50 @@ void UpdateManager::check_and_auto_update() const {
 #endif
     } catch (const std::exception& ex) {
         Logger::log(LogLevel::kWarn, "Updater", "Update check failed: " + std::string(ex.what()));
+    }
+}
+
+void UpdateManager::install_latest_release() const {
+    try {
+        std::string latest_version;
+        const auto download_url = latest_release_package_url(&latest_version);
+        if (download_url.empty()) {
+            Logger::log(LogLevel::kWarn, "Updater", "Installer not found in cloud releases.");
+            return;
+        }
+
+        Logger::log(LogLevel::kWarn, "Updater", "Installing latest release " + latest_version + " from cloud.");
+        const auto payload = http_get(download_url, 300L);
+        const auto temp_dir = std::filesystem::temp_directory_path() / "zautomate-install";
+        std::filesystem::create_directories(temp_dir);
+
+#if defined(_WIN32)
+        const auto package_path = temp_dir / "zautomate-install.zip";
+#elif defined(__APPLE__)
+        const auto package_path = temp_dir / "zautomate-install.dmg";
+#else
+        const auto package_path = temp_dir / "zautomate-install.deb";
+#endif
+
+        std::ofstream out(package_path, std::ios::binary);
+        out.write(payload.data(), static_cast<std::streamsize>(payload.size()));
+        out.close();
+
+#if defined(_WIN32)
+        Logger::log(LogLevel::kWarn, "Updater", "Installer downloaded to " + package_path.string() + ". Open it to install ZAutomate.");
+#elif defined(__APPLE__)
+        Logger::log(LogLevel::kWarn, "Updater", "Installer downloaded to " + package_path.string() + ". Open the DMG to install ZAutomate.");
+#else
+        const std::string cmd = "pkexec /usr/bin/dpkg -i " + shell_quote(package_path.string());
+        const int rc = std::system(cmd.c_str());
+        if (rc == 0) {
+            Logger::log(LogLevel::kWarn, "Updater", "Permanent install completed successfully.");
+        } else {
+            Logger::log(LogLevel::kWarn, "Updater", "Permanent install failed. Run the downloaded .deb with admin privileges.");
+        }
+#endif
+    } catch (const std::exception& ex) {
+        Logger::log(LogLevel::kWarn, "Updater", "Installer failed: " + std::string(ex.what()));
     }
 }
 

@@ -6,3 +6,5 @@ cpp/build/
 .idea/
 .DS_Store
 __pycache__/
+cpp/build-ninja/
+cpp/build-make/

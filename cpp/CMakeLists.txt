@@ -15,6 +15,7 @@ include(FetchContent)
 find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
 find_package(Qt6 QUIET COMPONENTS Widgets)
+find_package(Qt6 QUIET COMPONENTS Multimedia)
 
 FetchContent_Declare(
     nlohmann_json
@@ -62,6 +63,10 @@ if(Qt6_FOUND)
     )
     target_include_directories(zautomate PRIVATE include)
     target_link_libraries(zautomate PRIVATE zautomate_core zautomate_api Qt6::Widgets)
+    if(TARGET Qt6::Multimedia)
+        target_link_libraries(zautomate PRIVATE Qt6::Multimedia)
+        target_compile_definitions(zautomate PRIVATE ZAUTOMATE_HAS_QT_MULTIMEDIA=1)
+    endif()
     target_compile_definitions(zautomate PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
     if(UNIX AND NOT APPLE)
         set_target_properties(zautomate PROPERTIES

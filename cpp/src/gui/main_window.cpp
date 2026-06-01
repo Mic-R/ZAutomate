@@ -57,9 +57,15 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#if defined(ZAUTOMATE_HAS_QT_MULTIMEDIA)
+#include <QAudioDevice>
+#include <QMediaDevices>
+#endif
+
 #include "zautomate/database_client.hpp"
 #include "zautomate/logger.hpp"
 #include "zautomate/gui/easter_egg_dialog.hpp"
+#include "zautomate/update_manager.hpp"
 
 namespace zautomate {
 
@@ -77,6 +83,39 @@ enum SearchItemRole {
 };
 
 constexpr char kCartMimeType[] = "application/x-zautomate-cart";
+constexpr char kSystemDefaultAudioLabel[] = "System default output";
+
+void populate_audio_device_picker(QComboBox* combo, const QString& selectedText = QString()) {
+    if (!combo) {
+        return;
+    }
+
+    combo->clear();
+
+#if defined(ZAUTOMATE_HAS_QT_MULTIMEDIA)
+    combo->addItem(kSystemDefaultAudioLabel);
+    const auto outputs = QMediaDevices::audioOutputs();
+    for (const auto& device : outputs) {
+        combo->addItem(device.description());
+    }
+    if (!selectedText.isEmpty()) {
+        const int index = combo->findText(selectedText);
+        combo->setCurrentIndex(index >= 0 ? index : 0);
+    } else if (combo->count() > 0) {
+        combo->setCurrentIndex(0);
+    }
+#else
+    combo->addItem(kSystemDefaultAudioLabel);
+    combo->addItem("Qt Multimedia not available");
+    combo->setCurrentIndex(0);
+    if (!selectedText.isEmpty()) {
+        const int index = combo->findText(selectedText);
+        if (index >= 0) {
+            combo->setCurrentIndex(index);
+        }
+    }
+#endif
+}
 
 QJsonObject cart_to_json(const Cart& cart, const QString& kind) {
     QJsonObject obj;
@@ -325,8 +364,8 @@ private:
         auto* form = new QFormLayout();
 
         audio_output_combo_ = new QComboBox(playback);
-        audio_output_combo_->addItems({"Default system output", "Studio monitor", "Air monitor"});
-        form->addRow("Default audio output", audio_output_combo_);
+        populate_audio_device_picker(audio_output_combo_);
+        form->addRow("Audio device", audio_output_combo_);
 
         theme_combo_ = new QComboBox(playback);
         theme_combo_->addItems({"Fusion", "System"});
@@ -350,7 +389,7 @@ private:
         base_search_url_edit_->setText(settings.value("network/baseSearchUrl", "https://wsbf.net").toString());
         library_prefix_edit_->setText(settings.value("storage/libraryPrefix", "/users/jermaine").toString());
         search_limit_spin_->setValue(settings.value("studio/searchResultLimit", 24).toInt());
-        audio_output_combo_->setCurrentText(settings.value("audio/defaultOutput", "Default system output").toString());
+        populate_audio_device_picker(audio_output_combo_, settings.value("audio/defaultOutput", kSystemDefaultAudioLabel).toString());
         theme_combo_->setCurrentText(settings.value("ui/theme", "Fusion").toString());
         auto_refresh_check_->setChecked(settings.value("cart/autoRefreshOnStart", true).toBool());
         verbose_activity_check_->setChecked(settings.value("ui/verboseActivityLog", false).toBool());
@@ -422,7 +461,7 @@ MainWindow::MainWindow(std::unique_ptr<DatabaseProvider> db_client, QWidget* par
     {
         QSettings settings;
         if (audio_output_combo_) {
-            audio_output_combo_->setCurrentText(settings.value("audio/defaultOutput", "Default system output").toString());
+            populate_audio_device_picker(audio_output_combo_, settings.value("audio/defaultOutput", kSystemDefaultAudioLabel).toString());
         }
         const auto theme_name = settings.value("ui/theme", "Fusion").toString();
         if (!theme_name.isEmpty()) {
@@ -496,6 +535,20 @@ void MainWindow::build_ui() {
     search_action_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_K));
     connect(search_action_, &QAction::triggered, this, &MainWindow::run_studio_search);
 
+    install_action_ = toolsMenu->addAction("Install permanently");
+    connect(install_action_, &QAction::triggered, this, [this]() {
+        append_activity("Permanent install requested.");
+        set_busy(true, "Installing ZAutomate system-wide...");
+        auto updater = std::make_shared<UpdateManager>("https://cloud.mic-r.eu/zautomate", ZAUTOMATE_VERSION);
+        std::thread([this, updater]() {
+            updater->install_latest_release();
+            QMetaObject::invokeMethod(this, [this]() {
+                set_busy(false);
+                statusBar()->showMessage("Install action finished", 2500);
+            }, Qt::QueuedConnection);
+        }).detach();
+    });
+
     settings_action_ = toolsMenu->addAction("Settings");
     settings_action_->setShortcut(QKeySequence::Preferences);
     connect(settings_action_, &QAction::triggered, this, &MainWindow::open_settings_dialog);
@@ -520,11 +573,13 @@ void MainWindow::build_ui() {
     toolbar->setIconSize(QSize(16, 16));
     toolbar->addAction(refresh_all_action_);
     toolbar->addAction(search_action_);
+    toolbar->addAction(install_action_);
     toolbar->addAction(settings_action_);
     toolbar->addAction(easter_egg_action_);
     // Ensure actions are enabled on startup
     if (refresh_all_action_) refresh_all_action_->setEnabled(true);
     if (search_action_) search_action_->setEnabled(true);
+    if (install_action_) install_action_->setEnabled(true);
     if (settings_action_) settings_action_->setEnabled(true);
     if (easter_egg_action_) easter_egg_action_->setEnabled(true);
 
@@ -544,14 +599,8 @@ void MainWindow::build_ui() {
     overview_status_->setWordWrap(true);
     overview_status_->setText("Ready — use the toolbar to refresh or run searches.");
 
-    status_hint_ = new QLabel("Windows-style shell: menu bar, toolbar, split panes, and live data.", hero);
-    status_hint_->setObjectName("heroHint");
-    status_hint_->setWordWrap(true);
-    status_hint_->setToolTip("Keyboard shortcut: Ctrl+Shift+B");
-
     heroLayout->addWidget(hero_title_);
     heroLayout->addWidget(overview_status_);
-    heroLayout->addWidget(status_hint_);
 
     auto* automationGroup = new QGroupBox("Automation");
     auto* automationLayout = new QVBoxLayout(automationGroup);
@@ -569,15 +618,14 @@ void MainWindow::build_ui() {
     auto* audioRow = new QHBoxLayout;
     auto* audioLabel = new QLabel("Output:", automationGroup);
     audio_output_combo_ = new QComboBox(automationGroup);
-    audio_output_combo_->addItem("Default system output");
-    audio_output_combo_->addItem("Studio monitor");
-    audio_output_combo_->addItem("Air monitor");
+    populate_audio_device_picker(audio_output_combo_, QSettings().value("audio/defaultOutput", kSystemDefaultAudioLabel).toString());
     auto* audioApplyButton = new QPushButton("Apply", automationGroup);
-    audio_output_status_ = new QLabel("Audio routing is ready for a backend hookup.", automationGroup);
+    audio_output_status_ = new QLabel("Choose a device for playback output.", automationGroup);
     audio_output_status_->setWordWrap(true);
     connect(audioApplyButton, &QPushButton::clicked, this, [this]() {
         if (audio_output_status_ && audio_output_combo_) {
             audio_output_status_->setText(QString("Selected output: %1").arg(audio_output_combo_->currentText()));
+            QSettings().setValue("audio/defaultOutput", audio_output_combo_->currentText());
         }
         append_activity(QString("Audio output selected: %1").arg(audio_output_combo_ ? audio_output_combo_->currentText() : QString("unknown")));
     });
@@ -1284,6 +1332,9 @@ void MainWindow::set_busy(bool busy, const QString& message) {
     }
     if (search_action_) {
         search_action_->setEnabled(!busy);
+    }
+    if (install_action_) {
+        install_action_->setEnabled(!busy);
     }
 }
 

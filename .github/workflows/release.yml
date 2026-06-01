@@ -22,7 +22,7 @@ jobs:
 
       - name: Install build tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ libcurl4-openssl-dev dpkg-dev qt6-base-dev qt6-wayland
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ libcurl4-openssl-dev dpkg-dev qt6-base-dev qt6-multimedia-dev qt6-wayland
 
       - name: Install build tools (macOS)
         if: runner.os == 'macOS'
