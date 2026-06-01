@@ -1,14 +1,17 @@
 #include <exception>
 #include <memory>
+#include <thread>
 
 #include <QApplication>
 #include <QFont>
 #include <QIcon>
 #include <QSettings>
+#include <QTimer>
 
 #include "zautomate/database_client.hpp"
 #include "zautomate/gui/main_window.hpp"
 #include "zautomate/logger.hpp"
+#include "zautomate/update_manager.hpp"
 
 int main(int argc, char* argv[]) {
     try {
@@ -36,6 +39,12 @@ int main(int argc, char* argv[]) {
         }
         auto db = std::make_unique<zautomate::DatabaseClient>(library_prefix, api_base_url);
         zautomate::MainWindow window(std::move(db));
+        auto updater = std::make_shared<zautomate::UpdateManager>("https://cloud.mic-r.eu/zautomate", ZAUTOMATE_VERSION);
+        QTimer::singleShot(1500, &app, [updater]() {
+            std::thread([updater]() {
+                updater->check_and_auto_update();
+            }).detach();
+        });
         return app.exec();
     } catch (const std::exception& ex) {
         zautomate::Logger::log(zautomate::LogLevel::kError, "Main", "Fatal error: " + std::string(ex.what()));

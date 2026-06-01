@@ -182,7 +182,7 @@ UnifiedApp::UnifiedApp(std::unique_ptr<DatabaseProvider> db_client)
       automation_(*db_),
       studio_(*db_),
     cart_machine_(*db_),
-    updater_("wsbf", "ZAutomate", ZAUTOMATE_VERSION) {}
+        updater_("https://cloud.mic-r.eu/zautomate", ZAUTOMATE_VERSION) {}
 
 void UnifiedApp::render_header() const {
     std::cout << "\nZAutomate C++ Fork\n";

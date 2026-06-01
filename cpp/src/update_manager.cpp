@@ -1,13 +1,12 @@
 #include "zautomate/update_manager.hpp"
 
 #include <curl/curl.h>
-#include <nlohmann/json.hpp>
 
-#include <array>
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -27,7 +26,7 @@ std::size_t write_callback(void* data, std::size_t size, std::size_t nmemb, void
     return len;
 }
 
-std::string http_get(const std::string& url) {
+std::string http_get(const std::string& url, long timeout_seconds = 15L) {
     CURL* curl = curl_easy_init();
     if (!curl) {
         throw std::runtime_error("curl init failed");
@@ -38,7 +37,7 @@ std::string http_get(const std::string& url) {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "ZAutomateCpp/1.0");
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_seconds);
 
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
@@ -46,6 +45,24 @@ std::string http_get(const std::string& url) {
         throw std::runtime_error("update check failed");
     }
     return response;
+}
+
+bool ends_with(const std::string& value, const std::string& suffix) {
+    return value.size() >= suffix.size() &&
+        value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+std::string shell_quote(const std::string& value) {
+    std::string quoted = "'";
+    for (char c : value) {
+        if (c == '\'') {
+            quoted += "'\\''";
+        } else {
+            quoted += c;
+        }
+    }
+    quoted += "'";
+    return quoted;
 }
 
 std::vector<int> parse_semver(const std::string& version) {
@@ -71,8 +88,8 @@ std::vector<int> parse_semver(const std::string& version) {
 
 }  // namespace
 
-UpdateManager::UpdateManager(std::string owner, std::string repo, std::string current_version)
-    : owner_(std::move(owner)), repo_(std::move(repo)), current_version_(std::move(current_version)) {
+UpdateManager::UpdateManager(std::string cloud_root_url, std::string current_version)
+    : cloud_root_url_(normalize_base_url(std::move(cloud_root_url))), current_version_(std::move(current_version)) {
     curl_global_init(CURL_GLOBAL_DEFAULT);
 }
 
@@ -81,6 +98,23 @@ std::string UpdateManager::normalize_version(const std::string& raw) {
         return raw.substr(1);
     }
     return raw;
+}
+
+std::string UpdateManager::normalize_base_url(std::string raw) {
+    while (!raw.empty() && raw.back() == '/') {
+        raw.pop_back();
+    }
+    return raw;
+}
+
+std::string UpdateManager::join_url(const std::string& base, const std::string& path) {
+    if (base.empty()) {
+        return path;
+    }
+    if (path.empty()) {
+        return base;
+    }
+    return base + (path.front() == '/' ? "" : "/") + path;
 }
 
 bool UpdateManager::is_newer_version(const std::string& latest, const std::string& current) {
@@ -100,56 +134,80 @@ bool UpdateManager::is_newer_version(const std::string& latest, const std::strin
 
 void UpdateManager::check_and_auto_update() const {
     try {
-        const std::string url = "https://api.github.com/repos/" + owner_ + "/" + repo_ + "/releases/latest";
-        const auto body = http_get(url);
-        auto json = nlohmann::json::parse(body);
-
-        const std::string tag = json.value("tag_name", "");
-        if (tag.empty()) {
-            Logger::log(LogLevel::kWarn, "Updater", "Update check: no release tag found.");
+        if (cloud_root_url_.empty()) {
+            Logger::log(LogLevel::kWarn, "Updater", "Update check skipped: no cloud release URL configured.");
             return;
         }
 
-        const std::string latest = normalize_version(tag);
+        const auto root_index = http_get(cloud_root_url_ + "/");
+        std::regex release_dir_re(R"(href="(v([0-9]+(?:\.[0-9]+)+))/")");
+
+        std::string latest_dir;
+        std::string latest_version;
+        for (std::sregex_iterator it(root_index.begin(), root_index.end(), release_dir_re), end; it != end; ++it) {
+            const std::string dir = (*it)[1].str();
+            const std::string version = normalize_version((*it)[2].str());
+            if (latest_version.empty() || is_newer_version(version, latest_version)) {
+                latest_version = version;
+                latest_dir = dir;
+            }
+        }
+
+        if (latest_dir.empty()) {
+            Logger::log(LogLevel::kWarn, "Updater", "Update check: no release directories found on cloud.");
+            return;
+        }
+
         const std::string current = normalize_version(current_version_);
 
-        if (!is_newer_version(latest, current)) {
+        if (!is_newer_version(latest_version, current)) {
             return;
         }
 
         Logger::log(LogLevel::kWarn,
                 "Updater",
-                "Update available: " + latest + " (current " + current + ")");
+                "Update available: " + latest_version + " (current " + current + ")");
 
-        std::string download_url;
+        std::string package_dir;
 #if defined(_WIN32)
+        package_dir = "packages-Windows";
         const std::string expected_ext = ".zip";
+#elif defined(__APPLE__)
+        package_dir = "packages-macOS";
+        const std::string expected_ext = ".dmg";
 #else
+        package_dir = "packages-Linux";
         const std::string expected_ext = ".deb";
 #endif
 
-        if (json.contains("assets") && json["assets"].is_array()) {
-            for (const auto& asset : json["assets"]) {
-                const std::string name = asset.value("name", "");
-                if (name.size() >= expected_ext.size() &&
-                    name.compare(name.size() - expected_ext.size(), expected_ext.size(), expected_ext) == 0) {
-                    download_url = asset.value("browser_download_url", "");
-                    break;
-                }
+        const auto package_index = http_get(join_url(cloud_root_url_, latest_dir + "/" + package_dir + "/"));
+        std::regex asset_href_re(R"(href="([^"]+)")");
+
+        std::string download_url;
+        for (std::sregex_iterator it(package_index.begin(), package_index.end(), asset_href_re), end; it != end; ++it) {
+            const std::string href = (*it)[1].str();
+            if (href == "../") {
+                continue;
+            }
+            if (ends_with(href, expected_ext)) {
+                download_url = join_url(cloud_root_url_, latest_dir + "/" + package_dir + "/" + href);
+                break;
             }
         }
 
         if (download_url.empty()) {
-            Logger::log(LogLevel::kWarn, "Updater", "Update asset not found for this platform.");
+            Logger::log(LogLevel::kWarn, "Updater", "Update installer not found for this platform in cloud releases.");
             return;
         }
 
-        const auto payload = http_get(download_url);
+        const auto payload = http_get(download_url, 300L);
         const auto temp_dir = std::filesystem::temp_directory_path() / "zautomate-update";
         std::filesystem::create_directories(temp_dir);
 
 #if defined(_WIN32)
         const auto package_path = temp_dir / "zautomate-update.zip";
+#elif defined(__APPLE__)
+        const auto package_path = temp_dir / "zautomate-update.dmg";
 #else
         const auto package_path = temp_dir / "zautomate-update.deb";
 #endif
@@ -163,15 +221,20 @@ void UpdateManager::check_and_auto_update() const {
                     "Updater",
                     "Update package downloaded to " + package_path.string() +
                         ". Install will be applied on next manual deployment.");
+#elif defined(__APPLE__)
+        Logger::log(LogLevel::kWarn,
+                    "Updater",
+                    "Update package downloaded to " + package_path.string() +
+                        ". Open the DMG to install the new version.");
 #else
-        const std::string cmd = "dpkg -i " + package_path.string() + " >/tmp/zautomate-update.log 2>&1";
+    const std::string cmd = "pkexec /usr/bin/dpkg -i " + shell_quote(package_path.string());
         const int rc = std::system(cmd.c_str());
         if (rc == 0) {
             Logger::log(LogLevel::kWarn, "Updater", "Auto-update installed successfully. Restart application.");
         } else {
             Logger::log(LogLevel::kWarn,
                         "Updater",
-                        "Auto-update download complete but install failed (permissions likely required).");
+                        "Auto-update download complete but install failed. Run the downloaded .deb with admin privileges.");
         }
 #endif
     } catch (const std::exception& ex) {
