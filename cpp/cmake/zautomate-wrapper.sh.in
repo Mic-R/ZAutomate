@@ -30,52 +30,65 @@ export LD_LIBRARY_PATH="$SYMLINK_DIR:$BUNDLE_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBR
 export QT_PLUGIN_PATH="$BUNDLE_LIB_DIR/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
 export QT_QPA_PLATFORM_PLUGIN_PATH="$BUNDLE_LIB_DIR/qt6/plugins/platforms"
 
-install_xcb_cursor() {
+install_xcb_deps() {
 	if ! command -v apt-get >/dev/null 2>&1; then
-		printf '%s\n' "ZAutomate needs libxcb-cursor0 for Qt's xcb platform plugin." >&2
-		printf '%s\n' "Install it with: sudo apt-get install libxcb-cursor0" >&2
+		printf '%s\n' "ZAutomate needs Ubuntu Qt/xcb platform dependencies." >&2
+		printf '%s\n' "Install them with: sudo apt-get install libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxkbcommon-x11-0" >&2
 		return 1
 	fi
 
-	printf '%s\n' "ZAutomate needs Ubuntu package libxcb-cursor0 for Qt's xcb platform plugin." >&2
+	printf '%s\n' "ZAutomate needs Ubuntu Qt/xcb platform dependencies." >&2
+	packages="libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxkbcommon-x11-0"
 
 	if [ "$(id -u)" = "0" ]; then
-		apt-get update && apt-get install -y libxcb-cursor0
+		apt-get update && apt-get install -y $packages
 		return $?
 	fi
 
 	if [ -t 0 ] && command -v sudo >/dev/null 2>&1; then
-		printf '%s' "Install libxcb-cursor0 now? [y/N] " >&2
+		printf '%s' "Install missing Qt/xcb packages now? [y/N] " >&2
 		read answer || answer=
 		case "$answer" in
 			y|Y|yes|YES)
-				sudo apt-get update && sudo apt-get install -y libxcb-cursor0
+				sudo apt-get update && sudo apt-get install -y $packages
 				return $?
 				;;
 		esac
 	fi
 
 	if command -v pkexec >/dev/null 2>&1; then
-		printf '%s\n' "Requesting permission to install libxcb-cursor0..." >&2
-		pkexec /bin/sh -c 'apt-get update && apt-get install -y libxcb-cursor0'
+		printf '%s\n' "Requesting permission to install Qt/xcb packages..." >&2
+		pkexec /bin/sh -c "apt-get update && apt-get install -y $packages"
 		return $?
 	fi
 
-	printf '%s\n' "Install it with: sudo apt-get install libxcb-cursor0" >&2
+	printf '%s\n' "Install them with: sudo apt-get install $packages" >&2
 	return 1
 }
 
 XCB_PLUGIN="$QT_QPA_PLATFORM_PLUGIN_PATH/libqxcb.so"
+xcb_ready=0
 if [ -f "$XCB_PLUGIN" ] && command -v ldd >/dev/null 2>&1; then
 	xcb_ldd=$(ldd "$XCB_PLUGIN" 2>/dev/null || true)
-	if printf '%s\n' "$xcb_ldd" | grep -q 'libxcb-cursor\.so\.0 => not found'; then
-		install_xcb_cursor || true
+	if printf '%s\n' "$xcb_ldd" | grep -q 'not found'; then
+		printf '%s\n' "ZAutomate detected missing Qt/xcb dependencies:" >&2
+		printf '%s\n' "$xcb_ldd" | grep 'not found' >&2 || true
+		install_xcb_deps || true
+		xcb_ldd=$(ldd "$XCB_PLUGIN" 2>/dev/null || true)
+	fi
+	if ! printf '%s\n' "$xcb_ldd" | grep -q 'not found'; then
+		xcb_ready=1
 	fi
 	unset xcb_ldd
 fi
 
 if [ -z "${QT_QPA_PLATFORM:-}" ]; then
-	export QT_QPA_PLATFORM=xcb
+	if [ "$xcb_ready" = "1" ]; then
+		export QT_QPA_PLATFORM=xcb
+	elif [ -n "${WAYLAND_DISPLAY:-}" ]; then
+		export QT_QPA_PLATFORM=wayland
+	fi
 fi
+unset xcb_ready
 
 exec "$BUNDLE_BIN_DIR/zautomate" "$@"
