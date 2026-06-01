@@ -115,6 +115,18 @@ if(TARGET Qt6::Widgets)
             OUTPUT_VARIABLE QT_LIBS_SOURCE_DIR
             OUTPUT_STRIP_TRAILING_WHITESPACE
         )
+        set(QT_PLUGIN_DEP_DIRS "${QT_LIBS_SOURCE_DIR}")
+        foreach(candidate_dir
+            "/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}"
+            "/lib/${CMAKE_LIBRARY_ARCHITECTURE}"
+            "/usr/lib/x86_64-linux-gnu"
+            "/lib/x86_64-linux-gnu"
+        )
+            if(EXISTS "${candidate_dir}")
+                list(APPEND QT_PLUGIN_DEP_DIRS "${candidate_dir}")
+            endif()
+        endforeach()
+        list(REMOVE_DUPLICATES QT_PLUGIN_DEP_DIRS)
         file(GLOB QT_SHARED_LIBS
             "${QT_LIBS_SOURCE_DIR}/libQt6*.so*"
         )
@@ -166,6 +178,8 @@ if(TARGET Qt6::Widgets)
                     PRE_EXCLUDE_REGEXES
                         \".*libc\\.so.*\"
                         \".*ld-.*\\.so.*\"
+                    DIRECTORIES
+                        ${QT_PLUGIN_DEP_DIRS}
                 )
                 foreach(dep IN LISTS QT_PLUGIN_DEPS)
                     get_filename_component(dep_name \${dep} NAME)

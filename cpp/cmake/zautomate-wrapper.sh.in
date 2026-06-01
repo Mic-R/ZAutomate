@@ -12,14 +12,18 @@ cleanup() {
 
 trap cleanup EXIT HUP INT TERM
 
-for lib in "$BUNDLE_LIB_DIR"/lib*.so.*.*; do
+for lib in "$BUNDLE_LIB_DIR"/lib*.so.*; do
 	[ -e "$lib" ] || continue
 	base=$(basename -- "$lib")
-	soname=$(printf '%s\n' "$base" | sed -E 's/^(.+\.so\.[0-9]+)\..*$/\1/')
+	if command -v readelf >/dev/null 2>&1; then
+		soname=$(readelf -d "$lib" 2>/dev/null | sed -n 's/.*Library soname: \[\(.*\)\].*/\1/p' | head -n 1)
+	fi
+	soname=${soname:-$(printf '%s\n' "$base" | sed -E 's/^(.+\.so\.[0-9]+)\..*$/\1/')}
 	[ "$soname" != "$base" ] || continue
 	if [ ! -e "$SYMLINK_DIR/$soname" ]; then
 		ln -s "$lib" "$SYMLINK_DIR/$soname"
 	fi
+	unset soname
 done
 
 export LD_LIBRARY_PATH="$SYMLINK_DIR:$BUNDLE_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
