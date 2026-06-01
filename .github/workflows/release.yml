@@ -118,6 +118,22 @@ jobs:
             exit 1
           fi
 
+          APP_ROOT=$(dirname "$(dirname "$APP_BIN")")
+          APP_LIB_DIR="$APP_ROOT/lib"
+          XCB_PLUGIN="$APP_LIB_DIR/qt6/plugins/platforms/libqxcb.so"
+          if [ ! -f "$XCB_PLUGIN" ]; then
+            echo "No bundled xcb platform plugin found at $XCB_PLUGIN" >&2
+            find "$APP_LIB_DIR/qt6/plugins/platforms" -maxdepth 1 -type f | sort >&2 || true
+            exit 1
+          fi
+
+          echo "Checking bundled xcb platform plugin dependencies"
+          LD_LIBRARY_PATH="$APP_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ldd "$XCB_PLUGIN" | tee /tmp/zautomate-xcb-ldd.log
+          if grep -q 'not found' /tmp/zautomate-xcb-ldd.log; then
+            echo "Bundled xcb platform plugin has unresolved dependencies" >&2
+            exit 1
+          fi
+
           echo "Smoke testing $APP_BIN"
           rc=0
           timeout 15s env QT_QPA_PLATFORM=offscreen "$APP_BIN" >/tmp/zautomate-smoke.log 2>&1 || rc=$?

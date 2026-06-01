@@ -30,8 +30,48 @@ export LD_LIBRARY_PATH="$SYMLINK_DIR:$BUNDLE_LIB_DIR${LD_LIBRARY_PATH:+:$LD_LIBR
 export QT_PLUGIN_PATH="$BUNDLE_LIB_DIR/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
 export QT_QPA_PLATFORM_PLUGIN_PATH="$BUNDLE_LIB_DIR/qt6/plugins/platforms"
 
-if [ -z "${QT_QPA_PLATFORM:-}" ]; then
-	export QT_QPA_PLATFORM=xcb
+install_xcb_cursor() {
+	if ! command -v apt-get >/dev/null 2>&1; then
+		printf '%s\n' "ZAutomate needs libxcb-cursor0 for Qt's xcb platform plugin." >&2
+		printf '%s\n' "Install it with: sudo apt-get install libxcb-cursor0" >&2
+		return 1
+	fi
+
+	printf '%s\n' "ZAutomate needs Ubuntu package libxcb-cursor0 for Qt's xcb platform plugin." >&2
+
+	if [ "$(id -u)" = "0" ]; then
+		apt-get update && apt-get install -y libxcb-cursor0
+		return $?
+	fi
+
+	if [ -t 0 ] && command -v sudo >/dev/null 2>&1; then
+		printf '%s' "Install libxcb-cursor0 now? [y/N] " >&2
+		read answer || answer=
+		case "$answer" in
+			y|Y|yes|YES)
+				sudo apt-get update && sudo apt-get install -y libxcb-cursor0
+				return $?
+				;;
+		esac
+	fi
+
+	if command -v pkexec >/dev/null 2>&1; then
+		printf '%s\n' "Requesting permission to install libxcb-cursor0..." >&2
+		pkexec /bin/sh -c 'apt-get update && apt-get install -y libxcb-cursor0'
+		return $?
+	fi
+
+	printf '%s\n' "Install it with: sudo apt-get install libxcb-cursor0" >&2
+	return 1
+}
+
+XCB_PLUGIN="$QT_QPA_PLATFORM_PLUGIN_PATH/libqxcb.so"
+if [ -f "$XCB_PLUGIN" ] && command -v ldd >/dev/null 2>&1; then
+	xcb_ldd=$(ldd "$XCB_PLUGIN" 2>/dev/null || true)
+	if printf '%s\n' "$xcb_ldd" | grep -q 'libxcb-cursor\.so\.0 => not found'; then
+		install_xcb_cursor || true
+	fi
+	unset xcb_ldd
 fi
 
 exec "$BUNDLE_BIN_DIR/zautomate" "$@"
