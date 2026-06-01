@@ -227,7 +227,7 @@ void UpdateManager::check_and_auto_update() const {
                     "Update package downloaded to " + package_path.string() +
                         ". Open the DMG to install the new version.");
 #else
-    const std::string cmd = "pkexec /usr/bin/dpkg -i " + shell_quote(package_path.string());
+        const std::string cmd = "pkexec /usr/bin/dpkg -i " + shell_quote(package_path.string());
         const int rc = std::system(cmd.c_str());
         if (rc == 0) {
             Logger::log(LogLevel::kWarn, "Updater", "Auto-update installed successfully. Restart application.");
