@@ -67,6 +67,11 @@ ctest --test-dir cpp/build --output-on-failure
 cpack --config cpp/build/CPackConfig.cmake
 ```
 
+Remember to install dependencies:
+```bash
+sudo apt update && sudo apt install -y libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0 libegl1
+```
+
 This produces `.deb` packages on Linux.
 
 ### Build Windows Package
