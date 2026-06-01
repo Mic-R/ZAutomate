@@ -74,4 +74,8 @@ if [ -f "$XCB_PLUGIN" ] && command -v ldd >/dev/null 2>&1; then
 	unset xcb_ldd
 fi
 
+if [ -z "${QT_QPA_PLATFORM:-}" ]; then
+	export QT_QPA_PLATFORM=xcb
+fi
+
 exec "$BUNDLE_BIN_DIR/zautomate" "$@"

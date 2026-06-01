@@ -33,16 +33,27 @@ std::string http_get(const std::string& url, long timeout_seconds = 15L) {
     }
 
     std::string response;
+    char error_buffer[CURL_ERROR_SIZE]{};
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "ZAutomateCpp/1.0");
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_seconds);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 8L);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error_buffer);
 
     CURLcode res = curl_easy_perform(curl);
+    long status_code = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status_code);
     curl_easy_cleanup(curl);
     if (res != CURLE_OK) {
-        throw std::runtime_error("update check failed");
+        const char* curl_message = error_buffer[0] != '\0' ? error_buffer : curl_easy_strerror(res);
+        throw std::runtime_error("GET " + url + " failed: " + curl_message);
+    }
+    if (status_code >= 400) {
+        throw std::runtime_error("GET " + url + " returned HTTP " + std::to_string(status_code));
     }
     return response;
 }
@@ -254,7 +265,7 @@ void UpdateManager::check_and_auto_update() const {
         }
 #endif
     } catch (const std::exception& ex) {
-        Logger::log(LogLevel::kWarn, "Updater", "Update check failed: " + std::string(ex.what()));
+        Logger::log(LogLevel::kInfo, "Updater", "Update check skipped: " + std::string(ex.what()));
     }
 }
 

@@ -40,10 +40,12 @@
 #include <QTreeWidgetItem>
 #include <QToolBar>
 #include <QGridLayout>
+#include <QGuiApplication>
 #include <QScrollArea>
 #include <QDesktopServices>
 #include <QComboBox>
 #include <QSettings>
+#include <QScreen>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QIcon>
@@ -151,6 +153,20 @@ int parse_duration_ms_from_item(QListWidgetItem* item) {
         return 0;
     }
     return parts[0].toInt() * 60 * 1000 + parts[1].toInt() * 1000;
+}
+
+void configure_top_level_window(QMainWindow* window, const QSize& minimum_size) {
+    if (!window) {
+        return;
+    }
+
+    window->setWindowFlags(Qt::Window |
+                           Qt::WindowTitleHint |
+                           Qt::WindowSystemMenuHint |
+                           Qt::WindowMinimizeButtonHint |
+                           Qt::WindowMaximizeButtonHint |
+                           Qt::WindowCloseButtonHint);
+    window->setMinimumSize(minimum_size);
 }
 
 Cart cart_from_item(QListWidgetItem* item) {
@@ -501,17 +517,17 @@ void MainWindow::build_ui() {
     studio_window_ = new QMainWindow(nullptr);
     studio_window_->setWindowTitle("ZAutomate :: DJ Studio");
     studio_window_->setWindowIcon(QIcon(":/assets/app-icon.svg"));
-    studio_window_->setMinimumSize(700, 900);
+    configure_top_level_window(studio_window_, QSize(620, 480));
 
     cart_window_ = new QMainWindow(nullptr);
     cart_window_->setWindowTitle("ZAutomate :: Cart Machine");
     cart_window_->setWindowIcon(QIcon(":/assets/app-icon.svg"));
-    cart_window_->setMinimumSize(700, 900);
+    configure_top_level_window(cart_window_, QSize(620, 480));
 
     automation_window_ = new QMainWindow(nullptr);
     automation_window_->setWindowTitle("ZAutomate :: Automation");
     automation_window_->setWindowIcon(QIcon(":/assets/app-icon.svg"));
-    automation_window_->setMinimumSize(420, 320);
+    configure_top_level_window(automation_window_, QSize(360, 260));
 
     auto* root = new QWidget(this);
     auto* outer = new QVBoxLayout(root);
@@ -869,13 +885,27 @@ void MainWindow::build_ui() {
     automationOuter->addWidget(automationGroup);
     automation_window_->setCentralWidget(automationRoot);
 
-    // Position the windows roughly like the sample
-    studio_window_->resize(720, 1080);
-    studio_window_->move(60, 40);
-    cart_window_->resize(700, 1080);
-    cart_window_->move(820, 40);
-    automation_window_->resize(420, 360);
-    automation_window_->move(420, 320);
+    // Position the windows roughly like the sample while fitting smaller desktops.
+    const QRect available = QGuiApplication::primaryScreen()
+                                ? QGuiApplication::primaryScreen()->availableGeometry()
+                                : QRect(0, 0, 1280, 720);
+    const int work_width = available.width();
+    const int work_height = available.height();
+    const int margin = 32;
+    const int gap = 16;
+    const int tall_height = std::max(480, work_height - (margin * 2));
+    const bool side_by_side = work_width >= ((620 * 2) + (margin * 2) + gap);
+    const int pair_width = side_by_side
+                               ? std::max(620, (work_width - (margin * 2) - gap) / 2)
+                               : std::max(620, work_width - (margin * 2));
+
+    studio_window_->resize(std::min(720, pair_width), tall_height);
+    studio_window_->move(available.left() + margin, available.top() + margin);
+    cart_window_->resize(std::min(700, pair_width), tall_height);
+    cart_window_->move(side_by_side ? available.left() + margin + pair_width + gap : available.left() + margin + 48,
+                       side_by_side ? available.top() + margin : available.top() + margin + 48);
+    automation_window_->resize(420, 320);
+    automation_window_->move(available.left() + margin + (pair_width / 2), available.top() + margin + 120);
 
     studio_window_->show();
     cart_window_->show();
