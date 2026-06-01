@@ -54,7 +54,7 @@ add_executable(zautomate_cli src/cli_main.cpp)
 target_link_libraries(zautomate_cli PRIVATE zautomate_core zautomate_api)
 target_compile_definitions(zautomate_cli PRIVATE ZAUTOMATE_VERSION="${PROJECT_VERSION}")
 
-if(Qt6_FOUND)
+if(TARGET Qt6::Widgets)
     add_executable(zautomate
         src/main.cpp
         src/gui/main_window.cpp
